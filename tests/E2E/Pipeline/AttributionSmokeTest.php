@@ -1,6 +1,5 @@
 <?php
 
-use App\Jobs\ProcessAttribution;
 use App\Models\AttributionConnector;
 use App\Models\AttributionKey;
 use App\Models\AttributionResult;
@@ -15,7 +14,6 @@ use App\Models\Program;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\AttributionEngine;
-use App\Services\ConnectorKeyProcessor;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +32,7 @@ beforeEach(function () {
     $this->org->users()->attach($this->user);
     $this->workspace->users()->attach($this->user);
 
-    // PIE hierarchy
+    // PIE hierarchy — default initiative for EffortResolver
     $program = Program::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Email Marketing',
@@ -46,6 +44,7 @@ beforeEach(function () {
         'program_id' => $program->id,
         'name' => 'Welcome Series',
         'code' => 'WS',
+        'is_default' => true,
     ]);
     $this->effort = Effort::create([
         'workspace_id' => $this->workspace->id,
@@ -83,11 +82,10 @@ beforeEach(function () {
 it('creates attribution results for matching campaigns and conversions', function () {
     $sharedEmails = ['alice@example.com', 'bob@example.com'];
 
-    // Create campaigns with effort_id
+    // Create campaigns (no effort_id — resolved on keys by EffortResolver)
     $campaign1 = CampaignEmail::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'name' => 'Welcome Alice',
         'from_email' => $sharedEmails[0],
@@ -97,7 +95,6 @@ it('creates attribution results for matching campaigns and conversions', functio
     $campaign2 = CampaignEmail::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-2',
         'name' => 'Welcome Bob',
         'from_email' => $sharedEmails[1],
@@ -154,7 +151,7 @@ it('creates attribution results for matching campaigns and conversions', functio
         'is_active' => true,
     ]);
 
-    // Attribution keys and record keys
+    // Attribution keys with effort_id set (simulating EffortResolver output)
     foreach ($sharedEmails as $index => $email) {
         $hash = hash('sha256', $email, true);
         $key = AttributionKey::create([
@@ -162,6 +159,7 @@ it('creates attribution results for matching campaigns and conversions', functio
             'connector_id' => $connector->id,
             'key_hash' => bin2hex($hash),
             'key_value' => $email,
+            'effort_id' => $this->effort->id,
         ]);
 
         // Link campaign
@@ -194,9 +192,11 @@ it('creates attribution results for matching campaigns and conversions', functio
         ]);
     }
 
-    // Run attribution
-    $job = new ProcessAttribution($this->workspace);
-    $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
+    // Run attribution engine directly (keys and record_keys are pre-created above)
+    $engine = app(AttributionEngine::class);
+    foreach (['first_click', 'last_click', 'linear'] as $model) {
+        $engine->run($this->workspace, $connector, $model);
+    }
 
     // Verify results were created
     $results = AttributionResult::where('workspace_id', $this->workspace->id)->get();

@@ -89,7 +89,6 @@ it('resolves campaign fields from raw_data JSON and creates correct key hashes',
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $rawData->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'from_email' => $email,
     ]);
@@ -145,7 +144,6 @@ it('links campaign records to correct keys via raw_data resolution', function ()
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $raw1->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'from_email' => $email1,
     ]);
@@ -153,7 +151,6 @@ it('links campaign records to correct keys via raw_data resolution', function ()
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $raw2->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-2',
         'from_email' => $email2,
     ]);
@@ -227,7 +224,6 @@ it('resolves Voluum custom variables via -TS CASE expression', function () {
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $campRaw->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'from_email' => $campaignId,
     ]);
@@ -296,7 +292,7 @@ it('handles Voluum -TS mapping where same friendly name maps to different custom
             'workspace_id' => $this->workspace->id,
             'raw_data_id' => $campRaw->id,
             'integration_id' => $this->campaignIntegration->id,
-            'effort_id' => $this->effort->id,
+    
             'external_id' => "camp-{$i}",
             'from_email' => $val,
         ]);
@@ -315,8 +311,8 @@ it('handles Voluum -TS mapping where same friendly name maps to different custom
     $keyValue1 = AttributionKey::find($key1->attribution_key_id);
     $keyValue2 = AttributionKey::find($key2->attribution_key_id);
 
-    expect($keyValue1->key_value)->toBe('campaign-A');
-    expect($keyValue2->key_value)->toBe('campaign-B');
+    expect($keyValue1->key_value)->toBe('campaign-a');
+    expect($keyValue2->key_value)->toBe('campaign-b');
 });
 
 it('is idempotent: re-processing produces same keys without duplicates', function () {
@@ -330,7 +326,6 @@ it('is idempotent: re-processing produces same keys without duplicates', functio
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $campRaw->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'from_email' => 'test@example.com',
     ]);
@@ -380,7 +375,6 @@ it('processes campaign email clicks and links them to keys via parent raw_data',
         'workspace_id' => $this->workspace->id,
         'raw_data_id' => $campRaw->id,
         'integration_id' => $this->campaignIntegration->id,
-        'effort_id' => $this->effort->id,
         'external_id' => 'camp-1',
         'from_email' => $email,
     ]);

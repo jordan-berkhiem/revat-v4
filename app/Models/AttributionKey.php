@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Effort;
 
 class AttributionKey extends Model
 {
@@ -17,6 +18,7 @@ class AttributionKey extends Model
         'connector_id',
         'key_hash',
         'key_value',
+        'effort_id',
     ];
 
     protected function casts(): array
@@ -36,6 +38,11 @@ class AttributionKey extends Model
     public function connector(): BelongsTo
     {
         return $this->belongsTo(AttributionConnector::class, 'connector_id');
+    }
+
+    public function effort(): BelongsTo
+    {
+        return $this->belongsTo(Effort::class);
     }
 
     public function recordKeys(): HasMany

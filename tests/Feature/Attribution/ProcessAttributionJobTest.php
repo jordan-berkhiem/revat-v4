@@ -1,7 +1,9 @@
 <?php
 
 use App\Jobs\ProcessAttribution;
+use App\Jobs\Summarization\RunSummarization;
 use App\Models\AttributionConnector;
+use App\Models\AttributionKey;
 use App\Models\AttributionResult;
 use App\Models\CampaignEmail;
 use App\Models\CampaignEmailClick;
@@ -15,30 +17,36 @@ use App\Models\Program;
 use App\Models\Workspace;
 use App\Services\AttributionEngine;
 use App\Services\ConnectorKeyProcessor;
+use App\Services\EffortResolver;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
+    Cache::flush();
+
     $this->org = Organization::create(['name' => 'Test Org']);
     $this->workspace = new Workspace(['name' => 'Default']);
     $this->workspace->organization_id = $this->org->id;
     $this->workspace->is_default = true;
     $this->workspace->save();
 
-    // PIE hierarchy
+    // PIE hierarchy — default initiative for EffortResolver
     $program = Program::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Test Program',
         'code' => 'TP',
     ]);
-    $initiative = Initiative::create([
+    $this->initiative = Initiative::create([
         'workspace_id' => $this->workspace->id,
         'program_id' => $program->id,
         'name' => 'Test Initiative',
         'code' => 'TI',
+        'is_default' => true,
     ]);
     $this->effort = Effort::create([
         'workspace_id' => $this->workspace->id,
-        'initiative_id' => $initiative->id,
+        'initiative_id' => $this->initiative->id,
         'name' => 'Test Effort',
         'code' => 'TE',
         'channel_type' => 'email',
@@ -66,10 +74,10 @@ beforeEach(function () {
 
 /**
  * Helper to set up test data with campaign, click, conversion, and raw_data linkages.
+ * No longer sets effort_id on campaign — EffortResolver handles that on attribution_keys.
  */
 function seedAttributionData(
     $workspace,
-    $effort,
     AttributionConnector $connector,
     $campaignIntegration,
     $conversionIntegration,
@@ -86,7 +94,6 @@ function seedAttributionData(
         'workspace_id' => $workspace->id,
         'raw_data_id' => $campRaw->id,
         'integration_id' => $campaignIntegration->id,
-        'effort_id' => $effort->id,
         'external_id' => 'camp-' . $email,
         'from_email' => $email,
     ]);
@@ -129,18 +136,29 @@ it('end-to-end: processes all active connectors and all models', function () {
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $connector, $this->campaignIntegration, $this->conversionIntegration);
+
+    Bus::fake([RunSummarization::class]);
 
     $job = new ProcessAttribution($this->workspace);
-    $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
+    $job->handle(app(ConnectorKeyProcessor::class), app(EffortResolver::class), app(AttributionEngine::class));
 
     // Should have results for all 3 models
     expect(AttributionResult::where('model', 'first_click')->count())->toBe(1);
     expect(AttributionResult::where('model', 'last_click')->count())->toBe(1);
     expect(AttributionResult::where('model', 'linear')->count())->toBe(1);
 
-    // All results should have correct effort
-    expect(AttributionResult::where('effort_id', $this->effort->id)->count())->toBe(3);
+    // EffortResolver auto-created an effort on the attribution key
+    $key = AttributionKey::where('connector_id', $connector->id)->first();
+    expect($key->effort_id)->not->toBeNull();
+
+    // All results should reference the auto-created effort
+    $autoEffort = Effort::find($key->effort_id);
+    expect($autoEffort)->not->toBeNull();
+    expect($autoEffort->auto_generated)->toBeTrue();
+    expect(AttributionResult::where('effort_id', $autoEffort->id)->count())->toBe(3);
+
+    Bus::assertDispatched(RunSummarization::class);
 });
 
 it('skips inactive connectors', function () {
@@ -167,10 +185,12 @@ it('skips inactive connectors', function () {
         'is_active' => false,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $activeConnector, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $activeConnector, $this->campaignIntegration, $this->conversionIntegration);
+
+    Bus::fake([RunSummarization::class]);
 
     $job = new ProcessAttribution($this->workspace);
-    $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
+    $job->handle(app(ConnectorKeyProcessor::class), app(EffortResolver::class), app(AttributionEngine::class));
 
     // Only results from active connector
     expect(AttributionResult::where('connector_id', $activeConnector->id)->count())->toBe(3);
@@ -201,11 +221,13 @@ it('processes only the specified connector when provided', function () {
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector1, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $connector1, $this->campaignIntegration, $this->conversionIntegration);
+
+    Bus::fake([RunSummarization::class]);
 
     // Only process connector1
     $job = new ProcessAttribution($this->workspace, $connector1);
-    $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
+    $job->handle(app(ConnectorKeyProcessor::class), app(EffortResolver::class), app(AttributionEngine::class));
 
     expect(AttributionResult::where('connector_id', $connector1->id)->count())->toBe(3);
     expect(AttributionResult::where('connector_id', $connector2->id)->count())->toBe(0);
@@ -223,10 +245,12 @@ it('runs only the specified model when provided', function () {
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $connector, $this->campaignIntegration, $this->conversionIntegration);
+
+    Bus::fake([RunSummarization::class]);
 
     $job = new ProcessAttribution($this->workspace, $connector, 'first_click');
-    $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
+    $job->handle(app(ConnectorKeyProcessor::class), app(EffortResolver::class), app(AttributionEngine::class));
 
     expect(AttributionResult::where('model', 'first_click')->count())->toBe(1);
     expect(AttributionResult::where('model', 'last_click')->count())->toBe(0);
@@ -245,7 +269,7 @@ it('partial failure: continues processing remaining connectors when one fails', 
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector1, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $connector1, $this->campaignIntegration, $this->conversionIntegration);
 
     // Mock ConnectorKeyProcessor to fail on second connector
     $mockProcessor = Mockery::mock(ConnectorKeyProcessor::class);
@@ -275,8 +299,10 @@ it('partial failure: continues processing remaining connectors when one fails', 
     Log::shouldReceive('info')->zeroOrMoreTimes();
     Log::shouldReceive('error')->atLeast()->once();
 
+    Bus::fake([RunSummarization::class]);
+
     $job = new ProcessAttribution($this->workspace);
-    $job->handle($mockProcessor, app(AttributionEngine::class));
+    $job->handle($mockProcessor, app(EffortResolver::class), app(AttributionEngine::class));
 
     // Good connector should have results
     expect(AttributionResult::where('connector_id', $connector1->id)->count())->toBeGreaterThan(0);
@@ -303,7 +329,7 @@ it('throws when ALL connectors fail', function () {
 
     $job = new ProcessAttribution($this->workspace);
 
-    expect(fn () => $job->handle($mockProcessor, app(AttributionEngine::class)))
+    expect(fn () => $job->handle($mockProcessor, app(EffortResolver::class), app(AttributionEngine::class)))
         ->toThrow(RuntimeException::class, 'All connectors failed');
 });
 
@@ -319,17 +345,20 @@ it('is idempotent: running twice produces same result count', function () {
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
+    seedAttributionData($this->workspace, $connector, $this->campaignIntegration, $this->conversionIntegration);
 
     $processor = app(ConnectorKeyProcessor::class);
+    $resolver = app(EffortResolver::class);
     $engine = app(AttributionEngine::class);
 
+    Bus::fake([RunSummarization::class]);
+
     $job1 = new ProcessAttribution($this->workspace);
-    $job1->handle($processor, $engine);
+    $job1->handle($processor, $resolver, $engine);
     $countAfterFirst = AttributionResult::count();
 
     $job2 = new ProcessAttribution($this->workspace);
-    $job2->handle($processor, $engine);
+    $job2->handle($processor, $resolver, $engine);
     $countAfterSecond = AttributionResult::count();
 
     expect($countAfterSecond)->toBe($countAfterFirst);
@@ -357,4 +386,28 @@ it('logs failure via failed method', function () {
 
     $job = new ProcessAttribution($this->workspace);
     $job->failed(new RuntimeException('Test failure'));
+});
+
+it('dispatches RunSummarization with correct workspace ID', function () {
+    $connector = AttributionConnector::create([
+        'workspace_id' => $this->workspace->id,
+        'name' => 'Test Connector',
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
+        'is_active' => true,
+    ]);
+
+    seedAttributionData($this->workspace, $connector, $this->campaignIntegration, $this->conversionIntegration);
+
+    Bus::fake([RunSummarization::class]);
+
+    $job = new ProcessAttribution($this->workspace);
+    $job->handle(app(ConnectorKeyProcessor::class), app(EffortResolver::class), app(AttributionEngine::class));
+
+    Bus::assertDispatched(RunSummarization::class, function ($job) {
+        return $job->workspaceId === $this->workspace->id;
+    });
 });

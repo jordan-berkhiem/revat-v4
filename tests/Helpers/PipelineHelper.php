@@ -138,7 +138,6 @@ trait PipelineHelper
             $campaigns->push(CampaignEmail::create([
                 'workspace_id' => $workspace->id,
                 'integration_id' => $campaignSetup['integration']->id,
-                'effort_id' => $effort->id,
                 'external_id' => "camp-{$i}",
                 'name' => "Campaign {$i}",
                 'from_email' => "sender{$i}@example.com",

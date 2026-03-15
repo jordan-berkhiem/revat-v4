@@ -91,10 +91,10 @@ class AttributionEngine
             ->whereNull('cs.deleted_at')
             ->whereNull('cec.deleted_at')
             ->whereNull('ce.deleted_at')
-            ->whereNotNull('ce.effort_id')
+            ->whereNotNull('ak.effort_id')
             ->select([
                 'cs.id as conversion_id',
-                'ce.effort_id',
+                'ak.effort_id',
                 'cec.clicked_at',
                 'cec.id as click_id',
             ]);
@@ -130,10 +130,10 @@ class AttributionEngine
             ->where('cs.workspace_id', $workspace->id)
             ->whereNull('cs.deleted_at')
             ->whereNull('ce.deleted_at')
-            ->whereNotNull('ce.effort_id')
+            ->whereNotNull('ak.effort_id')
             ->select([
                 'cs.id as conversion_id',
-                'ce.effort_id',
+                'ak.effort_id',
                 'ce.sent_at as clicked_at',  // Use sent_at as the timestamp for ordering
                 'ce.id as click_id',
             ]);

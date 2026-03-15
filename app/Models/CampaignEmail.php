@@ -16,7 +16,6 @@ class CampaignEmail extends Model
         'workspace_id',
         'raw_data_id',
         'integration_id',
-        'effort_id',
         'external_id',
         'name',
         'subject',
@@ -61,11 +60,6 @@ class CampaignEmail extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
-    }
-
-    public function effort(): BelongsTo
-    {
-        return $this->belongsTo(Effort::class);
     }
 
     public function emailClicks(): HasMany

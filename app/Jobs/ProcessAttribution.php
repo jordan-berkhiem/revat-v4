@@ -5,11 +5,14 @@ namespace App\Jobs;
 use App\Models\AttributionConnector;
 use App\Models\Integration;
 use App\Models\Workspace;
+use App\Jobs\Summarization\RunSummarization;
 use App\Services\AttributionEngine;
 use App\Services\ConnectorKeyProcessor;
+use App\Services\EffortResolver;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -39,7 +42,7 @@ class ProcessAttribution implements ShouldBeUnique, ShouldQueue
         return (string) $this->workspace->id;
     }
 
-    public function handle(ConnectorKeyProcessor $keyProcessor, AttributionEngine $engine): void
+    public function handle(ConnectorKeyProcessor $keyProcessor, EffortResolver $effortResolver, AttributionEngine $engine): void
     {
         $connectors = $this->resolveConnectors();
         $models = $this->resolveModels();
@@ -56,6 +59,14 @@ class ProcessAttribution implements ShouldBeUnique, ShouldQueue
                 $keyProcessor->processKeys($connector);
 
                 Log::info("ProcessAttribution: Key processing completed for connector [{$connector->id}]", [
+                    'workspace_id' => $this->workspace->id,
+                ]);
+
+                Log::info("ProcessAttribution: Resolving efforts for connector [{$connector->id}]", [
+                    'workspace_id' => $this->workspace->id,
+                ]);
+                $effortResolver->resolveEfforts($connector);
+                Log::info("ProcessAttribution: Effort resolution completed for connector [{$connector->id}]", [
                     'workspace_id' => $this->workspace->id,
                 ]);
 
@@ -99,6 +110,8 @@ class ProcessAttribution implements ShouldBeUnique, ShouldQueue
             ->where('sync_in_progress', true)
             ->where('last_sync_status', 'attributing')
             ->each(fn (Integration $i) => $i->markSyncCompleted());
+
+        Bus::dispatch(new RunSummarization($this->workspace->id));
     }
 
     /**
