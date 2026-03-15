@@ -252,6 +252,25 @@ class ExpertSenderConnector extends BasePlatformConnector
         return $clicks;
     }
 
+    public function getMatchableFields(Integration $integration): array
+    {
+        return [
+            'campaign_emails' => [
+                ['value' => 'Subject', 'label' => 'Subject'],
+                ['value' => 'FromName', 'label' => 'From Name'],
+                ['value' => 'FromEmail', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Message ID'],
+                ['value' => 'Type', 'label' => 'Message Type'],
+            ],
+            'campaign_email_clicks' => [
+                ['value' => 'Subject', 'label' => 'Subject'],
+                ['value' => 'FromName', 'label' => 'From Name'],
+                ['value' => 'FromEmail', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Message ID'],
+            ],
+        ];
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     protected function resolveCampaignType(string $apiType): string

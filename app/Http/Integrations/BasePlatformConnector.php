@@ -104,6 +104,11 @@ abstract class BasePlatformConnector extends Connector implements PlatformConnec
         throw UnsupportedDataTypeException::forPlatform($this->platform(), 'conversion_sales');
     }
 
+    public function getMatchableFields(Integration $integration): array
+    {
+        return [];
+    }
+
     public function supportsDataType(string $dataType): bool
     {
         $platformConfig = config("integrations.platforms.{$this->platform()}");

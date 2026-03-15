@@ -9,6 +9,7 @@ use App\Http\Integrations\Voluum\Requests\GetConversionsRequest;
 use App\Models\Integration;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Saloon\Exceptions\Request\FatalRequestException;
 use Saloon\Exceptions\Request\RequestException;
 use Saloon\Traits\Plugins\AlwaysThrowOnErrors;
@@ -115,4 +116,35 @@ class VoluumConnector extends BasePlatformConnector
         return $conversions;
     }
 
+    public function getMatchableFields(Integration $integration): array
+    {
+        $fields = [];
+
+        // Query distinct -TS (friendly name) values across customVariable1-10
+        $unions = [];
+        $bindings = [];
+
+        for ($n = 1; $n <= 10; $n++) {
+            $unions[] = "SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(raw_data, '$.\"customVariable{$n}-TS\"')) as friendly_name
+                FROM conversion_sale_raw_data
+                WHERE integration_id = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(raw_data, '$.\"customVariable{$n}-TS\"')) IS NOT NULL
+                AND JSON_UNQUOTE(JSON_EXTRACT(raw_data, '$.\"customVariable{$n}-TS\"')) != ''";
+            $bindings[] = $integration->id;
+        }
+
+        $sql = implode(' UNION ', $unions);
+        $rows = DB::select($sql, $bindings);
+
+        $seen = [];
+        foreach ($rows as $row) {
+            $name = $row->friendly_name;
+            if ($name && ! isset($seen[$name])) {
+                $fields[] = ['value' => $name, 'label' => $name];
+                $seen[$name] = true;
+            }
+        }
+
+        return ['conversion_sales' => $fields];
+    }
 }

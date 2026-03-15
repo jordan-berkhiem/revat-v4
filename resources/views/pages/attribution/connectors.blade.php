@@ -1,7 +1,9 @@
 <?php
 
+use App\Jobs\ProcessAttribution;
 use App\Models\AttributionConnector;
 use App\Models\Integration;
+use App\Services\Integrations\ConnectorRegistry;
 use App\Services\WorkspaceContext;
 use Livewire\Volt\Component;
 
@@ -32,12 +34,23 @@ new class extends Component
 
     public string $effortCodeSource = 'campaign';
 
+    // Cascading dropdown options
+    public array $campaignDataTypeOptions = [];
+
+    public array $conversionDataTypeOptions = [];
+
+    public array $campaignFieldOptions = [];
+
+    public array $conversionFieldOptions = [];
+
     public function openCreateModal(): void
     {
         $this->reset([
             'editingId', 'name', 'type', 'campaignIntegrationId', 'campaignDataType',
             'conversionIntegrationId', 'conversionDataType', 'fieldMappings', 'isActive',
             'effortCodeField', 'effortCodeSource',
+            'campaignDataTypeOptions', 'conversionDataTypeOptions',
+            'campaignFieldOptions', 'conversionFieldOptions',
         ]);
         $this->type = 'mapped';
         $this->isActive = true;
@@ -78,6 +91,20 @@ new class extends Component
                 ->toArray();
         }
 
+        // Restore cascading state for existing selections
+        if ($this->campaignIntegrationId) {
+            $this->loadDataTypeOptions('campaign', (int) $this->campaignIntegrationId);
+        }
+        if ($this->conversionIntegrationId) {
+            $this->loadDataTypeOptions('conversion', (int) $this->conversionIntegrationId);
+        }
+        if ($this->campaignIntegrationId && $this->campaignDataType) {
+            $this->loadFieldOptions('campaign', (int) $this->campaignIntegrationId, $this->campaignDataType);
+        }
+        if ($this->conversionIntegrationId && $this->conversionDataType) {
+            $this->loadFieldOptions('conversion', (int) $this->conversionIntegrationId, $this->conversionDataType);
+        }
+
         $this->showModal = true;
     }
 
@@ -86,6 +113,85 @@ new class extends Component
         $this->fieldMappings = [];
         $this->effortCodeField = '';
         $this->effortCodeSource = 'campaign';
+    }
+
+    public function updatedCampaignIntegrationId($value): void
+    {
+        $this->campaignDataType = '';
+        $this->campaignDataTypeOptions = [];
+        $this->campaignFieldOptions = [];
+
+        if ($value) {
+            $this->loadDataTypeOptions('campaign', (int) $value);
+        }
+    }
+
+    public function updatedConversionIntegrationId($value): void
+    {
+        $this->conversionDataType = '';
+        $this->conversionDataTypeOptions = [];
+        $this->conversionFieldOptions = [];
+
+        if ($value) {
+            $this->loadDataTypeOptions('conversion', (int) $value);
+        }
+    }
+
+    public function updatedCampaignDataType($value): void
+    {
+        $this->campaignFieldOptions = [];
+
+        if ($value && $this->campaignIntegrationId) {
+            $this->loadFieldOptions('campaign', (int) $this->campaignIntegrationId, $value);
+        }
+    }
+
+    public function updatedConversionDataType($value): void
+    {
+        $this->conversionFieldOptions = [];
+
+        if ($value && $this->conversionIntegrationId) {
+            $this->loadFieldOptions('conversion', (int) $this->conversionIntegrationId, $value);
+        }
+    }
+
+    protected function loadDataTypeOptions(string $side, int $integrationId): void
+    {
+        $integration = Integration::find($integrationId);
+        if (! $integration) {
+            return;
+        }
+
+        $platformConfig = config("integrations.platforms.{$integration->platform}");
+        $dataTypes = $platformConfig['data_types'] ?? [];
+
+        $options = array_map(fn ($dt) => ['value' => $dt, 'label' => str_replace('_', ' ', ucfirst($dt))], $dataTypes);
+
+        if ($side === 'campaign') {
+            $this->campaignDataTypeOptions = $options;
+        } else {
+            $this->conversionDataTypeOptions = $options;
+        }
+    }
+
+    protected function loadFieldOptions(string $side, int $integrationId, string $dataType): void
+    {
+        $integration = Integration::find($integrationId);
+        if (! $integration) {
+            return;
+        }
+
+        $registry = app(ConnectorRegistry::class);
+        $connector = $registry->resolve($integration);
+        $matchableFields = $connector->getMatchableFields($integration);
+
+        $options = $matchableFields[$dataType] ?? [];
+
+        if ($side === 'campaign') {
+            $this->campaignFieldOptions = $options;
+        } else {
+            $this->conversionFieldOptions = $options;
+        }
     }
 
     public function addMappingRow(): void
@@ -166,6 +272,11 @@ new class extends Component
             $connector->save();
         }
 
+        // Dispatch attribution processing for this connector
+        if ($connector->is_active) {
+            ProcessAttribution::dispatch($workspace, $connector);
+        }
+
         $this->showModal = false;
     }
 
@@ -179,9 +290,42 @@ new class extends Component
         AttributionConnector::forWorkspace($workspace->id)->findOrFail($id)->delete();
     }
 
-    public function getAvailableDataTypesProperty(): array
+    public function getCampaignIntegrationsProperty(): \Illuminate\Support\Collection
     {
-        return config('integrations.platforms', []);
+        $workspace = app(WorkspaceContext::class)->getWorkspace();
+        if (! $workspace) {
+            return collect();
+        }
+
+        $campaignPlatforms = collect(config('integrations.platforms', []))
+            ->filter(fn ($config) => collect($config['data_types'] ?? [])->contains(fn ($dt) => str_starts_with($dt, 'campaign_')))
+            ->keys()
+            ->toArray();
+
+        return Integration::forWorkspace($workspace->id)
+            ->active()
+            ->whereIn('platform', $campaignPlatforms)
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function getConversionIntegrationsProperty(): \Illuminate\Support\Collection
+    {
+        $workspace = app(WorkspaceContext::class)->getWorkspace();
+        if (! $workspace) {
+            return collect();
+        }
+
+        $conversionPlatforms = collect(config('integrations.platforms', []))
+            ->filter(fn ($config) => collect($config['data_types'] ?? [])->contains(fn ($dt) => str_starts_with($dt, 'conversion_')))
+            ->keys()
+            ->toArray();
+
+        return Integration::forWorkspace($workspace->id)
+            ->active()
+            ->whereIn('platform', $conversionPlatforms)
+            ->orderBy('name')
+            ->get();
     }
 
     public function with(): array
@@ -315,25 +459,34 @@ new class extends Component
                     </flux:select>
 
                     @if ($type === 'mapped')
-                        {{-- Mapped connector: campaign + conversion integration selects --}}
+                        {{-- Mapped connector: campaign side --}}
                         <div class="grid grid-cols-2 gap-4">
-                            <flux:select wire:model="campaignIntegrationId" label="Campaign Integration" placeholder="Select...">
-                                @foreach ($integrations as $integration)
+                            <flux:select wire:model.live="campaignIntegrationId" label="Campaign Integration" placeholder="Select...">
+                                @foreach ($this->campaignIntegrations as $integration)
                                     <flux:select.option value="{{ $integration->id }}">{{ $integration->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
 
-                            <flux:input wire:model="campaignDataType" label="Campaign Data Type" type="text" placeholder="e.g. campaign_emails" />
+                            <flux:select wire:model.live="campaignDataType" label="Campaign Data Type" placeholder="Select...">
+                                @foreach ($campaignDataTypeOptions as $option)
+                                    <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
                         </div>
 
+                        {{-- Mapped connector: conversion side --}}
                         <div class="grid grid-cols-2 gap-4">
-                            <flux:select wire:model="conversionIntegrationId" label="Conversion Integration" placeholder="Select...">
-                                @foreach ($integrations as $integration)
+                            <flux:select wire:model.live="conversionIntegrationId" label="Conversion Integration" placeholder="Select...">
+                                @foreach ($this->conversionIntegrations as $integration)
                                     <flux:select.option value="{{ $integration->id }}">{{ $integration->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
 
-                            <flux:input wire:model="conversionDataType" label="Conversion Data Type" type="text" placeholder="e.g. conversion_sales" />
+                            <flux:select wire:model.live="conversionDataType" label="Conversion Data Type" placeholder="Select...">
+                                @foreach ($conversionDataTypeOptions as $option)
+                                    <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
                         </div>
 
                         {{-- Field mappings --}}
@@ -345,9 +498,25 @@ new class extends Component
 
                             @foreach ($fieldMappings as $index => $mapping)
                                 <div class="flex items-center gap-2">
-                                    <flux:input wire:model="fieldMappings.{{ $index }}.campaign" placeholder="Campaign field" class="flex-1" />
-                                    <span class="text-slate-400 text-xs shrink-0">→</span>
-                                    <flux:input wire:model="fieldMappings.{{ $index }}.conversion" placeholder="Conversion field" class="flex-1" />
+                                    @if (! empty($campaignFieldOptions))
+                                        <flux:select wire:model="fieldMappings.{{ $index }}.campaign" placeholder="Campaign field" class="flex-1">
+                                            @foreach ($campaignFieldOptions as $option)
+                                                <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                    @else
+                                        <flux:input wire:model="fieldMappings.{{ $index }}.campaign" placeholder="Campaign field" class="flex-1" />
+                                    @endif
+                                    <span class="text-slate-400 text-xs shrink-0">&rarr;</span>
+                                    @if (! empty($conversionFieldOptions))
+                                        <flux:select wire:model="fieldMappings.{{ $index }}.conversion" placeholder="Conversion field" class="flex-1">
+                                            @foreach ($conversionFieldOptions as $option)
+                                                <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                    @else
+                                        <flux:input wire:model="fieldMappings.{{ $index }}.conversion" placeholder="Conversion field" class="flex-1" />
+                                    @endif
                                     <flux:button type="button" size="xs" variant="ghost" icon="x-mark" wire:click="removeMappingRow({{ $index }})" class="text-red-500 shrink-0" />
                                 </div>
                             @endforeach
@@ -365,21 +534,29 @@ new class extends Component
 
                         <div class="grid grid-cols-2 gap-4">
                             @if ($effortCodeSource === 'campaign')
-                                <flux:select wire:model="campaignIntegrationId" label="Integration" placeholder="Select...">
-                                    @foreach ($integrations as $integration)
+                                <flux:select wire:model.live="campaignIntegrationId" label="Integration" placeholder="Select...">
+                                    @foreach ($this->campaignIntegrations as $integration)
                                         <flux:select.option value="{{ $integration->id }}">{{ $integration->name }}</flux:select.option>
                                     @endforeach
                                 </flux:select>
 
-                                <flux:input wire:model="campaignDataType" label="Data Type" type="text" placeholder="e.g. campaign_emails" />
+                                <flux:select wire:model.live="campaignDataType" label="Data Type" placeholder="Select...">
+                                    @foreach ($campaignDataTypeOptions as $option)
+                                        <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
                             @else
-                                <flux:select wire:model="conversionIntegrationId" label="Integration" placeholder="Select...">
-                                    @foreach ($integrations as $integration)
+                                <flux:select wire:model.live="conversionIntegrationId" label="Integration" placeholder="Select...">
+                                    @foreach ($this->conversionIntegrations as $integration)
                                         <flux:select.option value="{{ $integration->id }}">{{ $integration->name }}</flux:select.option>
                                     @endforeach
                                 </flux:select>
 
-                                <flux:input wire:model="conversionDataType" label="Data Type" type="text" placeholder="e.g. conversion_sales" />
+                                <flux:select wire:model.live="conversionDataType" label="Data Type" placeholder="Select...">
+                                    @foreach ($conversionDataTypeOptions as $option)
+                                        <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
                             @endif
                         </div>
 

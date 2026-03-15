@@ -20,4 +20,11 @@ interface PlatformConnector
     public function supportsDataType(string $dataType): bool;
 
     public function platform(): string;
+
+    /**
+     * Return matchable field names for attribution, keyed by data type.
+     *
+     * @return array<string, array<array{value: string, label: string}>>
+     */
+    public function getMatchableFields(Integration $integration): array;
 }

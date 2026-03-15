@@ -4,112 +4,222 @@ namespace App\Services;
 
 use App\Models\AttributionConnector;
 use App\Models\AttributionKey;
-use App\Models\CampaignEmail;
-use App\Models\CampaignEmailClick;
-use App\Models\ConversionSale;
+use App\Models\Integration;
+use App\Services\Integrations\ConnectorRegistry;
 use Illuminate\Support\Facades\DB;
 
 class ConnectorKeyProcessor
 {
+    public function __construct(
+        protected ConnectorRegistry $registry,
+    ) {}
+
     /**
-     * Process keys for a connector: extract field values from campaign and conversion
-     * records, hash them, and create attribution_keys + attribution_record_keys.
+     * Process keys for a connector: extract field values from raw_data JSON,
+     * hash them, and create attribution_keys + attribution_record_keys.
      */
     public function processKeys(AttributionConnector $connector): void
     {
         $mappings = $connector->field_mappings;
 
+        $campaignIntegration = $connector->campaign_integration_id
+            ? Integration::find($connector->campaign_integration_id)
+            : null;
+
+        $conversionIntegration = $connector->conversion_integration_id
+            ? Integration::find($connector->conversion_integration_id)
+            : null;
+
         foreach ($mappings as $mapping) {
             $campaignField = $mapping['campaign'];
             $conversionField = $mapping['conversion'];
 
-            $this->processCampaignRecords($connector, $campaignField);
-            $this->processCampaignClickRecords($connector, $campaignField);
-            $this->processConversionRecords($connector, $conversionField);
+            if ($campaignIntegration) {
+                $this->validateFieldName($campaignField, $campaignIntegration, $connector->campaign_data_type);
+                $this->processCampaignRecords($connector, $campaignField);
+                $this->processCampaignClickRecords($connector, $campaignField);
+            }
+
+            if ($conversionIntegration) {
+                $this->validateFieldName($conversionField, $conversionIntegration, $connector->conversion_data_type);
+                $this->processConversionRecords($connector, $conversionField, $conversionIntegration);
+            }
         }
     }
 
     /**
-     * Extract keys from campaign_emails and link them via attribution_record_keys.
+     * Validate a field name against the platform's matchable fields whitelist.
+     * Prevents SQL injection via JSON path interpolation.
+     */
+    protected function validateFieldName(string $field, Integration $integration, ?string $dataType): void
+    {
+        $connector = $this->registry->resolve($integration);
+        $matchableFields = $connector->getMatchableFields($integration);
+
+        $allowedValues = [];
+        if ($dataType && isset($matchableFields[$dataType])) {
+            $allowedValues = array_column($matchableFields[$dataType], 'value');
+        } else {
+            // Collect all values across data types
+            foreach ($matchableFields as $fields) {
+                $allowedValues = array_merge($allowedValues, array_column($fields, 'value'));
+            }
+        }
+
+        if (! in_array($field, $allowedValues, true)) {
+            throw new \InvalidArgumentException(
+                "Field '{$field}' is not a valid matchable field for platform '{$integration->platform}'."
+            );
+        }
+    }
+
+    /**
+     * Extract keys from campaign_emails via raw_data JSON.
      */
     protected function processCampaignRecords(AttributionConnector $connector, string $field): void
     {
-        CampaignEmail::where('workspace_id', $connector->workspace_id)
-            ->whereNotNull($field)
-            ->chunkById(500, function ($records) use ($connector, $field) {
-                $this->processRecordBatch($connector, $records, $field, 'campaign_email');
+        $jsonPath = '$.' . $field;
+
+        DB::table('campaign_emails as ce')
+            ->join('campaign_email_raw_data as cerd', 'cerd.id', '=', 'ce.raw_data_id')
+            ->where('ce.workspace_id', $connector->workspace_id)
+            ->whereNull('ce.deleted_at')
+            ->whereNotNull(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"))
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"), '!=', '')
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"), '!=', 'null')
+            ->select([
+                'ce.id as record_id',
+                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}')) as field_value"),
+            ])
+            ->orderBy('ce.id')
+            ->chunk(500, function ($rows) use ($connector) {
+                $this->processRawDataBatch($connector, $rows, 'campaign_email');
             });
     }
 
     /**
-     * Extract keys from campaign_email_clicks linked to campaign_emails.
-     * Uses the campaign_email's field value for the key.
+     * Extract keys from campaign_email_clicks via the parent campaign_email's raw_data.
      */
     protected function processCampaignClickRecords(AttributionConnector $connector, string $field): void
     {
-        CampaignEmailClick::where('campaign_email_clicks.workspace_id', $connector->workspace_id)
-            ->join('campaign_emails', 'campaign_email_clicks.campaign_email_id', '=', 'campaign_emails.id')
-            ->whereNotNull("campaign_emails.{$field}")
-            ->select('campaign_email_clicks.*', "campaign_emails.{$field} as _key_value")
-            ->orderBy('campaign_email_clicks.id')
-            ->chunk(500, function ($clicks) use ($connector) {
-                foreach ($clicks as $click) {
-                    $value = $click->_key_value;
-                    $hexHash = hash('sha256', $value);
+        $jsonPath = '$.' . $field;
 
-                    $key = $this->findOrCreateKey($connector, $hexHash, $value);
-
-                    DB::table('attribution_record_keys')->updateOrInsert(
-                        [
-                            'connector_id' => $connector->id,
-                            'record_type' => 'campaign_email_click',
-                            'record_id' => $click->id,
-                        ],
-                        [
-                            'attribution_key_id' => $key->id,
-                            'workspace_id' => $connector->workspace_id,
-                        ]
-                    );
-                }
+        DB::table('campaign_email_clicks as cec')
+            ->join('campaign_emails as ce', 'ce.id', '=', 'cec.campaign_email_id')
+            ->join('campaign_email_raw_data as cerd', 'cerd.id', '=', 'ce.raw_data_id')
+            ->where('cec.workspace_id', $connector->workspace_id)
+            ->whereNull('cec.deleted_at')
+            ->whereNotNull(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"))
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"), '!=', '')
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}'))"), '!=', 'null')
+            ->select([
+                'cec.id as record_id',
+                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(cerd.raw_data, '{$jsonPath}')) as field_value"),
+            ])
+            ->orderBy('cec.id')
+            ->chunk(500, function ($rows) use ($connector) {
+                $this->processRawDataBatch($connector, $rows, 'campaign_email_click');
             });
     }
 
     /**
-     * Extract keys from conversion_sales and link them via attribution_record_keys.
+     * Extract keys from conversion_sales via raw_data JSON.
+     * Voluum uses -TS resolution; other platforms use direct JSON_EXTRACT.
      */
-    protected function processConversionRecords(AttributionConnector $connector, string $field): void
-    {
-        ConversionSale::where('workspace_id', $connector->workspace_id)
-            ->whereNotNull($field)
-            ->chunkById(500, function ($records) use ($connector, $field) {
-                $this->processRecordBatch($connector, $records, $field, 'conversion_sale');
-            });
-    }
-
-    /**
-     * Process a batch of records: extract field values, hash, upsert keys and record keys.
-     */
-    protected function processRecordBatch(
+    protected function processConversionRecords(
         AttributionConnector $connector,
-        $records,
         string $field,
-        string $recordType
+        Integration $integration,
     ): void {
-        foreach ($records as $record) {
-            $value = $record->{$field};
+        if ($integration->platform === 'voluum') {
+            $this->processVoluumConversionRecords($connector, $field);
+        } else {
+            $this->processDirectConversionRecords($connector, $field);
+        }
+    }
+
+    /**
+     * Voluum: resolve friendly name to customVariableN value via -TS CASE expression.
+     */
+    protected function processVoluumConversionRecords(AttributionConnector $connector, string $friendlyName): void
+    {
+        $caseExpression = $this->buildVoluumCaseExpression($friendlyName);
+
+        DB::table('conversion_sales as cs')
+            ->join('conversion_sale_raw_data as csrd', 'csrd.id', '=', 'cs.raw_data_id')
+            ->where('cs.workspace_id', $connector->workspace_id)
+            ->whereNull('cs.deleted_at')
+            ->select([
+                'cs.id as record_id',
+                DB::raw("{$caseExpression} as field_value"),
+            ])
+            ->orderBy('cs.id')
+            ->chunk(500, function ($rows) use ($connector) {
+                $this->processRawDataBatch($connector, $rows, 'conversion_sale');
+            });
+    }
+
+    /**
+     * Non-Voluum conversions: direct JSON_EXTRACT on raw_data.
+     */
+    protected function processDirectConversionRecords(AttributionConnector $connector, string $field): void
+    {
+        $jsonPath = '$.' . $field;
+
+        DB::table('conversion_sales as cs')
+            ->join('conversion_sale_raw_data as csrd', 'csrd.id', '=', 'cs.raw_data_id')
+            ->where('cs.workspace_id', $connector->workspace_id)
+            ->whereNull('cs.deleted_at')
+            ->whereNotNull(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '{$jsonPath}'))"))
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '{$jsonPath}'))"), '!=', '')
+            ->where(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '{$jsonPath}'))"), '!=', 'null')
+            ->select([
+                'cs.id as record_id',
+                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '{$jsonPath}')) as field_value"),
+            ])
+            ->orderBy('cs.id')
+            ->chunk(500, function ($rows) use ($connector) {
+                $this->processRawDataBatch($connector, $rows, 'conversion_sale');
+            });
+    }
+
+    /**
+     * Build a CASE expression that resolves a Voluum friendly name to the
+     * correct customVariableN value by matching against -TS fields.
+     */
+    protected function buildVoluumCaseExpression(string $friendlyName): string
+    {
+        // The friendly name is already validated against getMatchableFields()
+        $escaped = addslashes($friendlyName);
+
+        $branches = [];
+        for ($n = 1; $n <= 10; $n++) {
+            $branches[] = "WHEN JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '$.\"customVariable{$n}-TS\"')) = '{$escaped}'"
+                . " THEN JSON_UNQUOTE(JSON_EXTRACT(csrd.raw_data, '$.customVariable{$n}'))";
+        }
+
+        return 'CASE ' . implode(' ', $branches) . ' ELSE NULL END';
+    }
+
+    /**
+     * Process a batch of raw_data query results: hash values and upsert keys.
+     */
+    protected function processRawDataBatch($connector, $rows, string $recordType): void
+    {
+        foreach ($rows as $row) {
+            $value = $row->field_value;
             if ($value === null || $value === '') {
                 continue;
             }
 
             $hexHash = hash('sha256', $value);
-
             $key = $this->findOrCreateKey($connector, $hexHash, $value);
 
             DB::table('attribution_record_keys')->updateOrInsert(
                 [
                     'connector_id' => $connector->id,
                     'record_type' => $recordType,
-                    'record_id' => $record->id,
+                    'record_id' => $row->record_id,
                 ],
                 [
                     'attribution_key_id' => $key->id,

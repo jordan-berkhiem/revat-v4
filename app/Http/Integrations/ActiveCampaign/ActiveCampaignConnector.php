@@ -233,6 +233,28 @@ class ActiveCampaignConnector extends BasePlatformConnector
         } while (count($links) >= 20);
     }
 
+    public function getMatchableFields(Integration $integration): array
+    {
+        return [
+            'campaign_emails' => [
+                ['value' => 'subject', 'label' => 'Subject'],
+                ['value' => 'fromname', 'label' => 'From Name'],
+                ['value' => 'fromemail', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Campaign ID'],
+                ['value' => 'name', 'label' => 'Campaign Name'],
+                ['value' => 'cdate', 'label' => 'Created Date'],
+                ['value' => 'sdate', 'label' => 'Send Date'],
+            ],
+            'campaign_email_clicks' => [
+                ['value' => 'subject', 'label' => 'Subject'],
+                ['value' => 'fromname', 'label' => 'From Name'],
+                ['value' => 'fromemail', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Campaign ID'],
+                ['value' => 'name', 'label' => 'Campaign Name'],
+            ],
+        ];
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     protected function resolveCampaignType(array $campaign): string

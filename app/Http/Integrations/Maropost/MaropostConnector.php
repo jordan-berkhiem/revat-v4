@@ -229,6 +229,27 @@ class MaropostConnector extends BasePlatformConnector
         }
     }
 
+    public function getMatchableFields(Integration $integration): array
+    {
+        return [
+            'campaign_emails' => [
+                ['value' => 'name', 'label' => 'Campaign Name'],
+                ['value' => 'subject', 'label' => 'Subject'],
+                ['value' => 'from_name', 'label' => 'From Name'],
+                ['value' => 'from_email', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Campaign ID'],
+                ['value' => 'send_at', 'label' => 'Send Date'],
+            ],
+            'campaign_email_clicks' => [
+                ['value' => 'name', 'label' => 'Campaign Name'],
+                ['value' => 'subject', 'label' => 'Subject'],
+                ['value' => 'from_name', 'label' => 'From Name'],
+                ['value' => 'from_email', 'label' => 'From Email'],
+                ['value' => 'external_id', 'label' => 'Campaign ID'],
+            ],
+        ];
+    }
+
     protected function resolveStatus(array $campaign): ?string
     {
         return match ($campaign['status'] ?? '') {

@@ -5,7 +5,9 @@ use App\Models\AttributionConnector;
 use App\Models\AttributionResult;
 use App\Models\CampaignEmail;
 use App\Models\CampaignEmailClick;
+use App\Models\CampaignEmailRawData;
 use App\Models\ConversionSale;
+use App\Models\ConversionSaleRawData;
 use App\Models\Effort;
 use App\Models\Initiative;
 use App\Models\Organization;
@@ -42,21 +44,50 @@ beforeEach(function () {
         'channel_type' => 'email',
         'status' => 'active',
     ]);
+
+    // Campaign integration (Maropost)
+    $this->campaignIntegration = $this->workspace->integrations()->create([
+        'name' => 'Test Maropost',
+        'platform' => 'maropost',
+        'data_types' => ['campaign_emails', 'campaign_email_clicks'],
+        'is_active' => true,
+    ]);
+    $this->campaignIntegration->setCredentials(['account_id' => 'test', 'auth_token' => 'test']);
+
+    // Conversion integration (Voluum)
+    $this->conversionIntegration = $this->workspace->integrations()->create([
+        'name' => 'Test Voluum',
+        'platform' => 'voluum',
+        'data_types' => ['conversion_sales'],
+        'is_active' => true,
+    ]);
+    $this->conversionIntegration->setCredentials(['access_key_id' => 'test', 'access_key_secret' => 'test']);
 });
 
 /**
- * Helper to set up test data with campaign, click, conversion, and key linkages.
+ * Helper to set up test data with campaign, click, conversion, and raw_data linkages.
  */
 function seedAttributionData(
     $workspace,
     $effort,
     AttributionConnector $connector,
+    $campaignIntegration,
+    $conversionIntegration,
     string $email = 'test@example.com'
 ): void {
+    $campRaw = CampaignEmailRawData::create([
+        'workspace_id' => $workspace->id,
+        'integration_id' => $campaignIntegration->id,
+        'external_id' => 'camp-' . $email,
+        'raw_data' => ['from_email' => $email, 'name' => 'Test Campaign'],
+    ]);
+
     $campaign = CampaignEmail::create([
         'workspace_id' => $workspace->id,
+        'raw_data_id' => $campRaw->id,
+        'integration_id' => $campaignIntegration->id,
         'effort_id' => $effort->id,
-        'external_id' => 'camp-'.$email,
+        'external_id' => 'camp-' . $email,
         'from_email' => $email,
     ]);
 
@@ -66,9 +97,21 @@ function seedAttributionData(
         'clicked_at' => now()->subDays(3),
     ]);
 
+    $convRaw = ConversionSaleRawData::create([
+        'workspace_id' => $workspace->id,
+        'integration_id' => $conversionIntegration->id,
+        'external_id' => 'conv-' . $email,
+        'raw_data' => [
+            'customVariable1' => $email,
+            'customVariable1-TS' => 'campaignid',
+        ],
+    ]);
+
     ConversionSale::create([
         'workspace_id' => $workspace->id,
-        'external_id' => $email, // Matches the field_mapping conversion field
+        'raw_data_id' => $convRaw->id,
+        'integration_id' => $conversionIntegration->id,
+        'external_id' => 'conv-' . $email,
         'revenue' => 100,
         'converted_at' => now(),
     ]);
@@ -78,15 +121,15 @@ it('end-to-end: processes all active connectors and all models', function () {
     $connector = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Email Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector);
+    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
 
     $job = new ProcessAttribution($this->workspace);
     $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
@@ -104,26 +147,27 @@ it('skips inactive connectors', function () {
     $activeConnector = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Active Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
+    // Use campaign_email_clicks data type to avoid unique constraint
     AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Inactive Connector',
-        'campaign_integration_id' => 3,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 4,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_email_clicks',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => false,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $activeConnector);
+    seedAttributionData($this->workspace, $this->effort, $activeConnector, $this->campaignIntegration, $this->conversionIntegration);
 
     $job = new ProcessAttribution($this->workspace);
     $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
@@ -137,26 +181,27 @@ it('processes only the specified connector when provided', function () {
     $connector1 = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Connector 1',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
+    // Use campaign_email_clicks data type to avoid unique constraint
     $connector2 = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Connector 2',
-        'campaign_integration_id' => 3,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 4,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_email_clicks',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector1);
+    seedAttributionData($this->workspace, $this->effort, $connector1, $this->campaignIntegration, $this->conversionIntegration);
 
     // Only process connector1
     $job = new ProcessAttribution($this->workspace, $connector1);
@@ -170,15 +215,15 @@ it('runs only the specified model when provided', function () {
     $connector = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Test Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector);
+    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
 
     $job = new ProcessAttribution($this->workspace, $connector, 'first_click');
     $job->handle(app(ConnectorKeyProcessor::class), app(AttributionEngine::class));
@@ -192,39 +237,38 @@ it('partial failure: continues processing remaining connectors when one fails', 
     $connector1 = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Good Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector1);
+    seedAttributionData($this->workspace, $this->effort, $connector1, $this->campaignIntegration, $this->conversionIntegration);
 
     // Mock ConnectorKeyProcessor to fail on second connector
     $mockProcessor = Mockery::mock(ConnectorKeyProcessor::class);
-    $badConnectorId = null;
     $callCount = 0;
     $mockProcessor->shouldReceive('processKeys')
-        ->andReturnUsing(function ($connector) use (&$callCount, &$badConnectorId, $connector1) {
+        ->andReturnUsing(function ($connector) use (&$callCount, $connector1) {
             $callCount++;
             if ($connector->id !== $connector1->id) {
-                $badConnectorId = $connector->id;
                 throw new RuntimeException('Simulated failure');
             }
             // For the good connector, use the real processor
             app(ConnectorKeyProcessor::class)->processKeys($connector);
         });
 
+    // Use campaign_email_clicks data type to avoid unique constraint
     $connector2 = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Bad Connector',
-        'campaign_integration_id' => 3,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 4,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_email_clicks',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
@@ -242,11 +286,11 @@ it('throws when ALL connectors fail', function () {
     AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Failing Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
@@ -267,15 +311,15 @@ it('is idempotent: running twice produces same result count', function () {
     $connector = AttributionConnector::create([
         'workspace_id' => $this->workspace->id,
         'name' => 'Test Connector',
-        'campaign_integration_id' => 1,
-        'campaign_data_type' => 'email',
-        'conversion_integration_id' => 2,
-        'conversion_data_type' => 'sale',
-        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'external_id']],
+        'campaign_integration_id' => $this->campaignIntegration->id,
+        'campaign_data_type' => 'campaign_emails',
+        'conversion_integration_id' => $this->conversionIntegration->id,
+        'conversion_data_type' => 'conversion_sales',
+        'field_mappings' => [['campaign' => 'from_email', 'conversion' => 'campaignid']],
         'is_active' => true,
     ]);
 
-    seedAttributionData($this->workspace, $this->effort, $connector);
+    seedAttributionData($this->workspace, $this->effort, $connector, $this->campaignIntegration, $this->conversionIntegration);
 
     $processor = app(ConnectorKeyProcessor::class);
     $engine = app(AttributionEngine::class);
