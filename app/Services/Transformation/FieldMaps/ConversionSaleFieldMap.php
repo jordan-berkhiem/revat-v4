@@ -7,10 +7,13 @@ use RuntimeException;
 class ConversionSaleFieldMap
 {
     /**
-     * Per-platform mappings from connector-normalized field names to fact columns.
+     * Per-platform mappings from raw API field names to fact columns.
      *
-     * All connectors normalize their API responses to snake_case before storage,
-     * so these maps reflect the connector output — NOT the raw API field names.
+     * Connectors store the full API response, so these maps reflect the
+     * original API field names as they appear in raw_data.
+     *
+     * Fields prefixed with _ are extracted during transformation but not persisted
+     * to the fact table (e.g. _subscriber_email is used for identity resolution).
      *
      * @var array<string, array<string, string>>
      */
@@ -20,8 +23,7 @@ class ConversionSaleFieldMap
             'revenue' => 'revenue',
             'cost' => 'cost',
             'payout' => 'payout',
-            'converted_at' => 'converted_at',
-            'email' => '_subscriber_email',
+            'conversionTimestamp' => 'converted_at',
         ],
     ];
 

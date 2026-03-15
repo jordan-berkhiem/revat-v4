@@ -72,29 +72,16 @@ class MaropostConnector extends BasePlatformConnector
                 continue;
             }
 
-            $sentAt = ! empty($campaign['sent_at'])
-                ? Carbon::parse($campaign['sent_at'])->utc()->toDateTimeString()
-                : null;
+            // Start with full GraphQL response
+            $record = $campaign;
 
-            $campaigns->push([
-                'external_id' => $id,
-                'name' => $campaign['name'] ?? '',
-                'subject' => $campaign['subject'] ?? '',
-                'from_name' => $campaign['from_name'] ?? '',
-                'from_email' => $campaign['from_email'] ?? '',
-                'type' => $this->resolveCampaignType($campaign),
-                'status' => $this->resolveStatus($campaign),
-                'sent' => (int) ($campaign['total_sent'] ?? 0),
-                'delivered' => 0,
-                'opens' => (int) ($campaign['total_opens'] ?? 0),
-                'unique_opens' => (int) ($campaign['total_unique_opens'] ?? 0),
-                'clicks' => (int) ($campaign['total_clicks'] ?? 0),
-                'unique_clicks' => (int) ($campaign['total_unique_clicks'] ?? 0),
-                'unsubscribes' => (int) ($campaign['total_unsubscribes'] ?? 0),
-                'bounces' => (int) ($campaign['total_bounces'] ?? 0),
-                'sent_at' => $sentAt,
-                'platform_created_at' => $campaign['send_at'] ?? null,
-            ]);
+            // Add computed fields for the pipeline
+            $record['external_id'] = $id;
+
+            // Hash emails except sender
+            $record = $this->hashEmails($record, ['from_email']);
+
+            $campaigns->push($record);
         }
 
         return $campaigns;
@@ -223,7 +210,9 @@ class MaropostConnector extends BasePlatformConnector
                 continue;
             }
 
-            $subscriberEmailHash = hash('sha256', $email);
+            // Add computed fields for the pipeline
+            $record['external_campaign_id'] = (string) ($record['campaign_id'] ?? '');
+            $record['subscriber_email_hash'] = hash('sha256', $email);
 
             $clickUrl = $record['url'] ?? '';
             $urlParams = [];
@@ -231,14 +220,12 @@ class MaropostConnector extends BasePlatformConnector
             if (isset($parsedUrl['query'])) {
                 parse_str($parsedUrl['query'], $urlParams);
             }
+            $record['url_params'] = $urlParams;
 
-            $clicks->push([
-                'external_campaign_id' => (string) ($record['campaign_id'] ?? ''),
-                'subscriber_email_hash' => $subscriberEmailHash,
-                'click_url' => $clickUrl,
-                'url_params' => $urlParams,
-                'clicked_at' => $clickedAt,
-            ]);
+            // Hash emails in the record
+            $record = $this->hashEmails($record);
+
+            $clicks->push($record);
         }
     }
 

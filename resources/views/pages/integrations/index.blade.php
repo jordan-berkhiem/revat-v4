@@ -119,6 +119,17 @@ new class extends Component
             return;
         }
 
+        $exists = Integration::where('workspace_id', $workspace->id)
+            ->where('platform', $this->platform)
+            ->where('name', $this->name)
+            ->exists();
+
+        if ($exists) {
+            $this->addError('name', "An integration named \"{$this->name}\" already exists for this platform.");
+
+            return;
+        }
+
         $integration = new Integration([
             'name' => $this->name,
             'platform' => $this->platform,

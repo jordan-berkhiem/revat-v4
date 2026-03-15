@@ -103,27 +103,20 @@ class ExpertSenderConnector extends BasePlatformConnector
         $messages = $response->json('Data.Messages') ?? $response->json('Messages') ?? [];
 
         $metadata = [];
+        $parsedSentDates = []; // Parsed Carbon instances for filtering
+
         foreach ($messages as $msg) {
             $id = (string) ($msg['Id'] ?? '');
             if ($id === '') {
                 continue;
             }
 
-            $type = $msg['Type'] ?? '';
-            $sentAt = ! empty($msg['SentDate'])
+            // Preserve the full message object from the API
+            $metadata[$id] = $msg;
+
+            $parsedSentDates[$id] = ! empty($msg['SentDate'])
                 ? Carbon::parse($msg['SentDate'], $accountTz)->utc()
                 : null;
-
-            $metadata[$id] = [
-                'Id' => $id,
-                'name' => $msg['Tags'] ?? null,
-                'subject' => $msg['Subject'] ?? '',
-                'type' => $type,
-                'sentAt' => $sentAt,
-                'fromName' => $msg['FromName'] ?? '',
-                'fromEmail' => $msg['FromEmail'] ?? '',
-                'createdOn' => $msg['CreatedOn'] ?? null,
-            ];
         }
 
         // Step 2: Determine which messages need per-message stats fetched
@@ -138,7 +131,7 @@ class ExpertSenderConnector extends BasePlatformConnector
                 // Include messages with activity OR newly sent since last sync
                 $messageIds = collect($metadata)
                     ->filter(fn ($meta, $id) => in_array((string) $id, $activeIds, true)
-                        || ($meta['sentAt'] && $meta['sentAt'] >= $since))
+                        || ($parsedSentDates[$id] && $parsedSentDates[$id] >= $since))
                     ->keys()
                     ->all();
             }
@@ -157,25 +150,16 @@ class ExpertSenderConnector extends BasePlatformConnector
                 $stats = [];
             }
 
-            $campaigns->push([
-                'external_id' => (string) $msgId,
-                'name' => $meta['name'] ?: $meta['subject'] ?: '',
-                'subject' => $meta['subject'] ?: '',
-                'from_name' => $meta['fromName'] ?: '',
-                'from_email' => $meta['fromEmail'] ?: '',
-                'type' => $this->resolveCampaignType($meta['type']),
-                'status' => $meta['sentAt'] ? 'sent' : 'draft',
-                'sent' => (int) ($stats['Sent'] ?? 0),
-                'delivered' => (int) ($stats['Delivered'] ?? 0),
-                'opens' => (int) ($stats['Opens'] ?? 0),
-                'unique_opens' => (int) ($stats['UniqueOpens'] ?? 0),
-                'clicks' => (int) ($stats['Clicks'] ?? 0),
-                'unique_clicks' => (int) ($stats['UniqueClicks'] ?? 0),
-                'unsubscribes' => (int) ($stats['Unsubscribes'] ?? 0),
-                'bounces' => (int) ($stats['Bounced'] ?? $stats['Bounces'] ?? 0),
-                'sent_at' => $meta['sentAt']?->toDateTimeString(),
-                'platform_created_at' => $meta['createdOn'],
-            ]);
+            // Merge message metadata + stats, preserving all fields
+            $record = array_merge($meta, $stats);
+
+            // Add computed fields for the pipeline
+            $record['external_id'] = (string) $msgId;
+
+            // Hash emails except sender
+            $record = $this->hashEmails($record, ['FromEmail', 'fromEmail']);
+
+            $campaigns->push($record);
         }
 
         return $campaigns;
@@ -238,29 +222,30 @@ class ExpertSenderConnector extends BasePlatformConnector
                     continue;
                 }
 
-                $url = $this->resolveMergeTags($row['Url'] ?? '', $row);
-
                 $email = strtolower(trim($row['Email']));
-                $subscriberEmailHash = hash('sha256', $email);
 
-                $clickedAt = ! empty($row['Date'])
-                    ? Carbon::parse($row['Date'], $accountTz)->utc()->toDateTimeString()
-                    : null;
+                // Add computed fields for the pipeline
+                $row['external_campaign_id'] = (string) ($row['MessageId'] ?? '');
+                $row['subscriber_email_hash'] = hash('sha256', $email);
 
-                $clickUrl = $url ?: '';
+                $url = $this->resolveMergeTags($row['Url'] ?? '', $row);
+                $row['click_url'] = $url ?: '';
+
                 $urlParams = [];
-                $parsedUrl = parse_url($clickUrl);
+                $parsedUrl = parse_url($row['click_url']);
                 if (isset($parsedUrl['query'])) {
                     parse_str($parsedUrl['query'], $urlParams);
                 }
+                $row['url_params'] = $urlParams;
 
-                $clicks->push([
-                    'external_campaign_id' => (string) ($row['MessageId'] ?? ''),
-                    'subscriber_email_hash' => $subscriberEmailHash,
-                    'click_url' => $clickUrl,
-                    'url_params' => $urlParams,
-                    'clicked_at' => $clickedAt,
-                ]);
+                $row['clicked_at'] = ! empty($row['Date'])
+                    ? Carbon::parse($row['Date'], $accountTz)->utc()->toDateTimeString()
+                    : null;
+
+                // Hash emails in the record
+                $row = $this->hashEmails($row);
+
+                $clicks->push($row);
             }
         }
 

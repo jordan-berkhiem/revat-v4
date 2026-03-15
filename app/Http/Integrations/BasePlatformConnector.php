@@ -115,6 +115,30 @@ abstract class BasePlatformConnector extends Connector implements PlatformConnec
         return in_array($dataType, $platformConfig['data_types'] ?? [], true);
     }
 
+    // ── PII Helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Recursively hash any string values that look like email addresses.
+     *
+     * @param  array<string>  $preserveKeys  Keys whose values should NOT be hashed (e.g. sender email fields).
+     */
+    protected function hashEmails(array $data, array $preserveKeys = []): array
+    {
+        foreach ($data as $key => $value) {
+            if (in_array($key, $preserveKeys, true)) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $data[$key] = $this->hashEmails($value, $preserveKeys);
+            } elseif (is_string($value) && filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                $data[$key] = hash('sha256', mb_strtolower(trim($value)));
+            }
+        }
+
+        return $data;
+    }
+
     // ── Saloon Connector ────────────────────────────────────────────────
 
     protected function defaultConfig(): array

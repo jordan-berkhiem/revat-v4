@@ -103,18 +103,16 @@ class VoluumConnector extends BasePlatformConnector
         $rows = $data['rows'] ?? $data['conversions'] ?? [];
 
         foreach ($rows as $conversion) {
-            $conversions->push([
-                'external_id' => (string) ($conversion['clickId'] ?? $conversion['id'] ?? ''),
-                'revenue' => (float) ($conversion['revenue'] ?? 0),
-                'payout' => (float) ($conversion['payout'] ?? 0),
-                'cost' => (float) ($conversion['cost'] ?? 0),
-                'converted_at' => $conversion['visitTimestamp'] ?? $conversion['conversionTimestamp'] ?? null,
-                'campaign_id' => $conversion['campaignId'] ?? null,
-                'offer_id' => $conversion['offerId'] ?? null,
-                'country' => $conversion['country'] ?? null,
-            ]);
+            // Add external_id for dedup (extraction pipeline requires it at top level)
+            $conversion['external_id'] = (string) ($conversion['clickId'] ?? $conversion['id'] ?? '');
+
+            // Hash any email values in the payload before storage
+            $conversion = $this->hashEmails($conversion);
+
+            $conversions->push($conversion);
         }
 
         return $conversions;
     }
+
 }

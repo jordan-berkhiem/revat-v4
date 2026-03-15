@@ -90,7 +90,7 @@ class ActiveCampaignConnector extends BasePlatformConnector
         // Pass 2: Paginate /api/3/messages to build sender lookup
         $sendersByMessageId = $this->fetchSendersByMessageId();
 
-        // Pass 3: Join all sources into complete records
+        // Pass 3: Join all sources into complete records, preserving full API response
         $campaigns = collect();
 
         foreach ($campaignRows as $campaignId => $campaign) {
@@ -98,30 +98,22 @@ class ActiveCampaignConnector extends BasePlatformConnector
             $messageId = $messageIdByCampaignId[$campaignId] ?? null;
             $sender = $messageId ? ($sendersByMessageId[$messageId] ?? []) : [];
 
-            $sentAt = null;
-            if (! empty($campaign['sdate']) && $campaign['sdate'] !== '0000-00-00 00:00:00') {
-                $sentAt = $campaign['sdate'];
-            }
+            // Start with full campaign object from API
+            $record = $campaign;
 
-            $campaigns->push([
-                'external_id' => $campaignId,
-                'name' => $campaign['name'] ?? '',
-                'subject' => $subjectByCampaignId[$campaignId] ?? $campaign['subject'] ?? '',
-                'from_name' => $sender['fromname'] ?? '',
-                'from_email' => $sender['fromemail'] ?? '',
-                'type' => $this->resolveCampaignType($campaign),
-                'status' => $this->resolveStatus($campaign),
-                'sent' => (int) ($campaign['send_amt'] ?? $campaign['sent'] ?? 0),
-                'delivered' => (int) ($campaign['delivered'] ?? 0),
-                'opens' => (int) ($campaign['opens'] ?? 0),
-                'unique_opens' => (int) ($campaign['uniqueopens'] ?? $campaign['opens'] ?? 0),
-                'clicks' => (int) ($campaign['linkclicks'] ?? 0),
-                'unique_clicks' => (int) ($campaign['uniquelinkclicks'] ?? 0),
-                'unsubscribes' => (int) ($campaign['unsubscribes'] ?? 0),
-                'bounces' => (int) ($campaign['hardbounces'] ?? 0) + (int) ($campaign['softbounces'] ?? 0),
-                'sent_at' => $sentAt,
-                'platform_created_at' => $campaign['cdate'] ?? null,
-            ]);
+            // Add enrichment from other endpoints
+            $record['external_id'] = $campaignId;
+            $record['subject'] = $subjectByCampaignId[$campaignId] ?? $campaign['subject'] ?? '';
+            $record['fromname'] = $sender['fromname'] ?? '';
+            $record['fromemail'] = $sender['fromemail'] ?? '';
+
+            // Computed: total bounces (hard + soft)
+            $record['_bounces'] = (int) ($campaign['hardbounces'] ?? 0) + (int) ($campaign['softbounces'] ?? 0);
+
+            // Hash emails except sender
+            $record = $this->hashEmails($record, ['fromemail']);
+
+            $campaigns->push($record);
         }
 
         return $campaigns;
@@ -213,8 +205,14 @@ class ActiveCampaignConnector extends BasePlatformConnector
                         continue;
                     }
 
+                    // Merge link + info into a single record, preserving all fields
+                    $record = array_merge($link, $info);
+                    unset($record['info']); // Remove nested array to avoid duplication
+
+                    // Add computed fields for the pipeline
                     $email = strtolower(trim($info['email']));
-                    $subscriberEmailHash = hash('sha256', $email);
+                    $record['external_campaign_id'] = $campaignId;
+                    $record['subscriber_email_hash'] = hash('sha256', $email);
 
                     $clickUrl = $link['link'] ?? '';
                     $urlParams = [];
@@ -222,14 +220,12 @@ class ActiveCampaignConnector extends BasePlatformConnector
                     if (isset($parsedUrl['query'])) {
                         parse_str($parsedUrl['query'], $urlParams);
                     }
+                    $record['url_params'] = $urlParams;
 
-                    $clicks->push([
-                        'external_campaign_id' => $campaignId,
-                        'subscriber_email_hash' => $subscriberEmailHash,
-                        'click_url' => $clickUrl,
-                        'url_params' => $urlParams,
-                        'clicked_at' => $clickedAt,
-                    ]);
+                    // Hash emails in the record
+                    $record = $this->hashEmails($record);
+
+                    $clicks->push($record);
                 }
             }
 
