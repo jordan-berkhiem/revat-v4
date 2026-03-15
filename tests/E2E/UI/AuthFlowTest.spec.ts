@@ -99,9 +99,11 @@ test.describe('Authentication Flows', () => {
             return;
         }
 
-        // Fill in login form
-        await page.getByLabel('Email address').fill('owner@acmemarketing.test');
-        await page.getByLabel('Password').fill('password');
+        // Click and type into login form like a real user
+        await page.getByLabel('Email address').click();
+        await page.getByLabel('Email address').pressSequentially('owner@acmemarketing.test', { delay: 30 });
+        await page.getByLabel('Password').click();
+        await page.getByLabel('Password').pressSequentially('password', { delay: 30 });
 
         // Submit
         await page.getByRole('button', { name: 'Log in' }).click();
@@ -120,9 +122,11 @@ test.describe('Authentication Flows', () => {
             return;
         }
 
-        // Fill in login form with wrong password
-        await page.getByLabel('Email address').fill('owner@acmemarketing.test');
-        await page.getByLabel('Password').fill('wrongpassword');
+        // Click and type wrong credentials like a real user
+        await page.getByLabel('Email address').click();
+        await page.getByLabel('Email address').pressSequentially('owner@acmemarketing.test', { delay: 30 });
+        await page.getByLabel('Password').click();
+        await page.getByLabel('Password').pressSequentially('wrongpassword', { delay: 30 });
 
         // Submit
         await page.getByRole('button', { name: 'Log in' }).click();
@@ -138,10 +142,19 @@ test.describe('Authentication Flows', () => {
         // Set desktop viewport first
         await page.setViewportSize({ width: 1280, height: 720 });
 
-        // Log in via the test route (user 2 = owner@acmemarketing.test with org access)
-        await page.goto('/_test/login/2');
-        await page.waitForURL('**/dashboard', { timeout: 10000 });
+        // Log in via the test route to avoid rate limiting from prior login tests
+        const response = await page.goto('/login');
+        if (response && response.status() === 429) {
+            test.skip();
+            return;
+        }
         await page.waitForLoadState('domcontentloaded');
+        await page.getByLabel('Email address').click();
+        await page.getByLabel('Email address').pressSequentially('owner@acmemarketing.test', { delay: 30 });
+        await page.getByLabel('Password').click();
+        await page.getByLabel('Password').pressSequentially('password', { delay: 30 });
+        await page.getByRole('button', { name: 'Log in' }).click();
+        await page.waitForURL('**/dashboard', { timeout: 15000 });
 
         // Verify we're authenticated and header actions are visible
         await expect(page.getByTestId('header-actions')).toBeVisible();
@@ -149,18 +162,14 @@ test.describe('Authentication Flows', () => {
         // Open user menu dropdown
         const userMenuButton = page.getByTestId('user-menu').locator('button').first();
         await userMenuButton.click();
-        await page.waitForTimeout(500);
 
         // Find and click "Sign out"
         const signOutButton = page.getByText('Sign out');
         await expect(signOutButton).toBeVisible({ timeout: 3000 });
         await signOutButton.click();
 
-        // Logout redirects to the root URL
-        await page.waitForTimeout(3000);
-        const currentUrl = page.url();
-        // Should have left the dashboard
-        expect(currentUrl).not.toContain('/dashboard');
+        // Wait for navigation away from dashboard
+        await page.waitForURL(url => !url.toString().includes('/dashboard'), { timeout: 10000 });
 
         // Verify we're logged out by navigating to a protected page
         await page.goto('/dashboard');

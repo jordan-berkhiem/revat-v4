@@ -88,14 +88,11 @@ test.describe('Integrations Page', () => {
 
         // Click and wait for Livewire to process
         await button.click();
-        await page.waitForTimeout(2000);
 
-        // After Livewire round-trip, the modal form content should be in the DOM
-        // (Flux modal rendering is controlled by Alpine + Livewire integration)
+        // Wait for modal content to appear after Livewire round-trip
         const modalContent = page.locator('ui-modal[data-flux-modal]');
-        const html = await modalContent.innerHTML();
-        expect(html).toContain('Platform');
-        expect(html).toContain('Integration Name');
+        await expect(modalContent.getByText('Platform', { exact: true })).toBeVisible({ timeout: 5000 });
+        await expect(modalContent.getByText('Integration Name', { exact: true })).toBeVisible();
     });
 
     test('Modal dialog contains the integration form elements in DOM', async ({ page }) => {

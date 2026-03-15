@@ -36,23 +36,18 @@ test.describe('Mobile Viewport (375px)', () => {
         await page.goto('/dashboard');
         await page.waitForLoadState('domcontentloaded');
 
-        // Wait for Alpine.js to initialize
-        await page.waitForTimeout(500);
-
-        // Dispatch the Flux sidebar toggle event (same as clicking the toggle button)
-        await page.evaluate(() => {
-            window.dispatchEvent(new CustomEvent('flux-sidebar-toggle'));
-        });
-
-        // Wait for sidebar transition
-        await page.waitForTimeout(500);
+        // On mobile, the sidebar toggle may be in the header which can be off-screen
+        // Tap it to open the sidebar overlay
+        const toggle = page.locator('[data-flux-sidebar-toggle]').first();
+        await expect(toggle).toBeAttached();
+        await toggle.dispatchEvent('click');
 
         // Sidebar nav items should now be visible
         const navReports = page.getByTestId('nav-reports');
-        await expect(navReports).toBeVisible();
+        await expect(navReports).toBeVisible({ timeout: 3000 });
 
-        // Navigate via sidebar link using JS click since the sidebar overlay may not be fully in viewport
-        await navReports.evaluate((el: HTMLElement) => el.click());
+        // Tap the nav link to navigate (may be in sidebar overlay outside main viewport)
+        await navReports.dispatchEvent('click');
         await page.waitForURL('**/reports');
 
         await expect(page).toHaveURL(/\/reports/);

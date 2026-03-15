@@ -48,10 +48,13 @@ test.describe('Settings Pages', () => {
         await page.goto('/settings/password');
         await page.waitForLoadState('domcontentloaded');
 
-        // Fill the form fields to verify they're interactive
-        await page.getByLabel('Current password').fill('password');
-        await page.getByLabel('New password', { exact: true }).fill('newpassword123');
-        await page.getByLabel('Confirm new password').fill('newpassword123');
+        // Click and type into form fields like a real user
+        await page.getByLabel('Current password').click();
+        await page.getByLabel('Current password').pressSequentially('password', { delay: 30 });
+        await page.getByLabel('New password', { exact: true }).click();
+        await page.getByLabel('New password', { exact: true }).pressSequentially('newpassword123', { delay: 30 });
+        await page.getByLabel('Confirm new password').click();
+        await page.getByLabel('Confirm new password').pressSequentially('newpassword123', { delay: 30 });
 
         // Verify fields accepted input
         await expect(page.getByLabel('Current password')).toHaveValue('password');

@@ -39,8 +39,8 @@ test.describe('App Layout Pages', () => {
             await page.goto(page_def.path);
             await page.waitForLoadState('domcontentloaded');
 
-            // Allow a moment for any deferred errors
-            await page.waitForTimeout(500);
+            // Wait for network to settle before checking for errors
+            await page.waitForLoadState('networkidle');
             expect(errors).toHaveLength(0);
         });
 

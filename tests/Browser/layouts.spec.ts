@@ -138,8 +138,8 @@ test.describe('Assets', () => {
             }
         });
         await page.goto('/_layouts/auth-card');
-        // Fonts may be lazy-loaded, wait a moment
-        await page.waitForTimeout(1000);
+        // Wait for fonts to load via network idle
+        await page.waitForLoadState('networkidle');
         expect(fontResponses.length).toBeGreaterThan(0);
         expect(fontResponses.every(s => s === 200)).toBeTruthy();
     });

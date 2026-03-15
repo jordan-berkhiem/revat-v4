@@ -53,7 +53,11 @@ test.describe('Dark Mode', () => {
 
         // Add .dark class to html element
         await page.evaluate(() => document.documentElement.classList.add('dark'));
-        await page.waitForTimeout(300);
+
+        // Wait for dark background to apply
+        await expect.poll(async () => {
+            return page.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
+        }).not.toBe(lightBg);
 
         const darkBg = await page.evaluate(() => {
             return window.getComputedStyle(document.body).backgroundColor;
@@ -76,9 +80,8 @@ test.describe('Dark Mode', () => {
 
         // Add dark class
         await page.evaluate(() => document.documentElement.classList.add('dark'));
-        await page.waitForTimeout(300);
 
-        // In dark mode, moon button should be visible, sun should be hidden
+        // Wait for moon button to become visible in dark mode
         await expect(page.getByTestId('appearance-toggle-dark')).toBeVisible();
         await expect(page.getByTestId('appearance-toggle')).toBeHidden();
 
