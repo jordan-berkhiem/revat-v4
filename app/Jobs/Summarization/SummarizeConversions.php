@@ -41,16 +41,15 @@ class SummarizeConversions implements ShouldQueue
         $query = DB::table('conversion_sales')
             ->select(
                 DB::raw('workspace_id'),
-                DB::raw('DATE(converted_at) as summary_date'),
+                DB::raw('DATE(COALESCE(converted_at, created_at)) as summary_date'),
                 DB::raw('COUNT(*) as conversions_count'),
                 DB::raw('COALESCE(SUM(revenue), 0) as revenue'),
                 DB::raw('COALESCE(SUM(payout), 0) as payout'),
                 DB::raw('COALESCE(SUM(cost), 0) as cost'),
             )
             ->where('workspace_id', $this->workspaceId)
-            ->whereNotNull('converted_at')
             ->whereNull('deleted_at')
-            ->groupBy('workspace_id', DB::raw('DATE(converted_at)'));
+            ->groupBy('workspace_id', DB::raw('DATE(COALESCE(converted_at, created_at))'));
 
         if ($this->since) {
             $query->where('updated_at', '>=', $this->since);

@@ -23,7 +23,7 @@ class ConversionSaleFieldMap
             'revenue' => 'revenue',
             'cost' => 'cost',
             'payout' => 'payout',
-            'conversionTimestamp' => 'converted_at',
+            'postbackTimestamp' => 'converted_at',
         ],
     ];
 

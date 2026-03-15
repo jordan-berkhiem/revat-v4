@@ -53,15 +53,14 @@ class SummarizeAttribution implements ShouldQueue
             })
             ->select(
                 'attribution_results.workspace_id',
-                DB::raw('DATE(conversion_sales.converted_at) as summary_date'),
+                DB::raw('DATE(COALESCE(conversion_sales.converted_at, conversion_sales.created_at)) as summary_date'),
                 'attribution_results.model',
                 DB::raw('COUNT(*) as attributed_conversions'),
                 DB::raw('COALESCE(SUM(attribution_results.weight * COALESCE(conversion_sales.revenue, 0)), 0) as attributed_revenue'),
                 DB::raw('COALESCE(SUM(attribution_results.weight), 0) as total_weight'),
             )
             ->where('attribution_results.workspace_id', $this->workspaceId)
-            ->whereNotNull('conversion_sales.converted_at')
-            ->groupBy('attribution_results.workspace_id', DB::raw('DATE(conversion_sales.converted_at)'), 'attribution_results.model');
+            ->groupBy('attribution_results.workspace_id', DB::raw('DATE(COALESCE(conversion_sales.converted_at, conversion_sales.created_at))'), 'attribution_results.model');
 
         if ($this->since) {
             $query->where('attribution_results.updated_at', '>=', $this->since);
@@ -96,16 +95,15 @@ class SummarizeAttribution implements ShouldQueue
             ->select(
                 'attribution_results.workspace_id',
                 'attribution_results.effort_id',
-                DB::raw('DATE(conversion_sales.converted_at) as summary_date'),
+                DB::raw('DATE(COALESCE(conversion_sales.converted_at, conversion_sales.created_at)) as summary_date'),
                 'attribution_results.model',
                 DB::raw('COUNT(*) as attributed_conversions'),
                 DB::raw('COALESCE(SUM(attribution_results.weight * COALESCE(conversion_sales.revenue, 0)), 0) as attributed_revenue'),
                 DB::raw('COALESCE(SUM(attribution_results.weight), 0) as total_weight'),
             )
             ->where('attribution_results.workspace_id', $this->workspaceId)
-            ->whereNotNull('conversion_sales.converted_at')
             ->whereNotNull('attribution_results.effort_id')
-            ->groupBy('attribution_results.workspace_id', 'attribution_results.effort_id', DB::raw('DATE(conversion_sales.converted_at)'), 'attribution_results.model');
+            ->groupBy('attribution_results.workspace_id', 'attribution_results.effort_id', DB::raw('DATE(COALESCE(conversion_sales.converted_at, conversion_sales.created_at))'), 'attribution_results.model');
 
         if ($this->since) {
             $query->where('attribution_results.updated_at', '>=', $this->since);
