@@ -49,9 +49,9 @@ it('processes a valid batch end-to-end', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'test-1',
         'raw_data' => [
-            'campaignid' => 'test-1',
+            'external_id' => 'test-1',
             'name' => 'Test Campaign',
-            'total_sent' => 100,
+            'sent' => 100,
         ],
     ]);
 

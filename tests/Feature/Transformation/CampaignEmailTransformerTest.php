@@ -41,28 +41,29 @@ beforeEach(function () {
 // ── ActiveCampaign Transformation ─────────────────────────────────────
 
 it('transforms ActiveCampaign raw data to normalized fact record', function () {
+    // Raw data uses the same keys the ActiveCampaign connector outputs
     CampaignEmailRawData::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->integration->id,
         'external_id' => 'ac-123',
         'raw_data' => [
-            'campaignid' => 'ac-123',
+            'external_id' => 'ac-123',
             'name' => 'Welcome Email',
             'subject' => 'Welcome aboard!',
             'from_name' => 'Support',
             'from_email' => 'support@example.com',
             'type' => 'single',
-            'total_sent' => 1000,
+            'sent' => 1000,
             'delivered' => 950,
-            'bounced' => 50,
+            'bounces' => 50,
             'complaints' => 2,
             'unsubscribes' => 5,
             'opens' => 300,
             'unique_opens' => 250,
             'clicks' => 100,
             'unique_clicks' => 80,
-            'revenue' => 500.50,
-            'send_date' => '2026-01-15T10:00:00Z',
+            'platform_revenue' => 500.50,
+            'sent_at' => '2026-01-15T10:00:00Z',
         ],
     ]);
 
@@ -98,31 +99,33 @@ it('transforms ActiveCampaign raw data to normalized fact record', function () {
 
 // ── ExpertSender Transformation ───────────────────────────────────────
 
-it('transforms ExpertSender raw data with different field names', function () {
+it('transforms ExpertSender raw data using connector-normalized fields', function () {
     $this->integration->update(['platform' => 'expertsender']);
 
+    // Raw data uses the same keys the ExpertSender connector outputs
+    // (connector normalizes PascalCase API fields to snake_case)
     CampaignEmailRawData::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->integration->id,
         'external_id' => 'es-456',
         'raw_data' => [
-            'Id' => 'es-456',
-            'Name' => 'Newsletter',
-            'Subject' => 'Monthly Update',
-            'FromName' => 'Team',
-            'FromEmail' => 'team@example.com',
-            'Type' => 'newsletter',
-            'TotalSent' => 2000,
-            'TotalDelivered' => 1900,
-            'Bounced' => 100,
-            'Complaints' => 3,
-            'Unsubscribes' => 10,
-            'Opens' => 500,
-            'UniqueOpens' => 400,
-            'Clicks' => 200,
-            'UniqueClicks' => 150,
-            'Revenue' => 1200.00,
-            'SentDate' => '2026-02-01 08:00:00',
+            'external_id' => 'es-456',
+            'name' => 'Newsletter',
+            'subject' => 'Monthly Update',
+            'from_name' => 'Team',
+            'from_email' => 'team@example.com',
+            'type' => 'newsletter',
+            'sent' => 2000,
+            'delivered' => 1900,
+            'bounces' => 100,
+            'complaints' => 3,
+            'unsubscribes' => 10,
+            'opens' => 500,
+            'unique_opens' => 400,
+            'clicks' => 200,
+            'unique_clicks' => 150,
+            'platform_revenue' => 1200.00,
+            'sent_at' => '2026-02-01 08:00:00',
         ],
     ]);
 
@@ -141,6 +144,27 @@ it('transforms ExpertSender raw data with different field names', function () {
     expect($email->unique_clicks)->toBe(150);
 });
 
+// ── Unknown Platform ─────────────────────────────────────────────────
+
+it('throws when no field map exists for a platform', function () {
+    $this->integration->update(['platform' => 'unknown_platform']);
+
+    CampaignEmailRawData::create([
+        'workspace_id' => $this->workspace->id,
+        'integration_id' => $this->integration->id,
+        'external_id' => 'unk-1',
+        'raw_data' => [
+            'external_id' => 'unk-1',
+            'name' => 'Test',
+        ],
+    ]);
+
+    $result = $this->transformer->transform($this->batch);
+
+    expect($result->errors)->not->toBeEmpty();
+    expect($result->errors[0]['error'])->toContain('No CampaignEmail field map defined for platform');
+});
+
 // ── Upsert Behavior ──────────────────────────────────────────────────
 
 it('updates existing fact record on re-transformation without duplicating', function () {
@@ -149,11 +173,11 @@ it('updates existing fact record on re-transformation without duplicating', func
         'integration_id' => $this->integration->id,
         'external_id' => 'ac-789',
         'raw_data' => [
-            'campaignid' => 'ac-789',
+            'external_id' => 'ac-789',
             'name' => 'Original Name',
             'subject' => 'Original Subject',
-            'total_sent' => 100,
-            'send_date' => '2026-01-01',
+            'sent' => 100,
+            'sent_at' => '2026-01-01',
         ],
     ]);
 
@@ -166,11 +190,11 @@ it('updates existing fact record on re-transformation without duplicating', func
     // Update raw data and re-transform
     $rawData->update([
         'raw_data' => [
-            'campaignid' => 'ac-789',
+            'external_id' => 'ac-789',
             'name' => 'Updated Name',
             'subject' => 'Updated Subject',
-            'total_sent' => 200,
-            'send_date' => '2026-01-01',
+            'sent' => 200,
+            'sent_at' => '2026-01-01',
         ],
     ]);
 
@@ -190,9 +214,9 @@ it('preserves NULL for missing metric fields', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'ac-null',
         'raw_data' => [
-            'campaignid' => 'ac-null',
+            'external_id' => 'ac-null',
             'name' => 'Sparse Email',
-            'total_sent' => 500,
+            'sent' => 500,
             // No delivered, bounced, complaints, etc.
         ],
     ]);
@@ -222,9 +246,9 @@ it('creates archive snapshot during transformation', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'ac-archive',
         'raw_data' => [
-            'campaignid' => 'ac-archive',
+            'external_id' => 'ac-archive',
             'name' => 'Archive Test',
-            'total_sent' => 100,
+            'sent' => 100,
         ],
     ]);
 
@@ -249,9 +273,9 @@ it('processes records in configurable chunks', function () {
             'integration_id' => $this->integration->id,
             'external_id' => "chunk-{$i}",
             'raw_data' => [
-                'campaignid' => "chunk-{$i}",
+                'external_id' => "chunk-{$i}",
                 'name' => "Email {$i}",
-                'total_sent' => $i * 100,
+                'sent' => $i * 100,
             ],
         ]);
     }
@@ -281,9 +305,9 @@ it('handles various timestamp formats', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'ts-iso',
         'raw_data' => [
-            'campaignid' => 'ts-iso',
+            'external_id' => 'ts-iso',
             'name' => 'ISO Date',
-            'send_date' => '2026-03-01T12:00:00Z',
+            'sent_at' => '2026-03-01T12:00:00Z',
         ],
     ]);
 

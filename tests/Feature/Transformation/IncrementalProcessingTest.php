@@ -115,9 +115,9 @@ it('skips unchanged records and reports correct skip count', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'skip-1',
         'raw_data' => [
-            'campaignid' => 'skip-1',
+            'external_id' => 'skip-1',
             'name' => 'Test Campaign',
-            'total_sent' => 100,
+            'sent' => 100,
         ],
     ]);
 
@@ -143,9 +143,9 @@ it('processes all records when force mode is enabled', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'force-1',
         'raw_data' => [
-            'campaignid' => 'force-1',
+            'external_id' => 'force-1',
             'name' => 'Force Test',
-            'total_sent' => 100,
+            'sent' => 100,
         ],
     ]);
 
@@ -168,9 +168,9 @@ it('processes all records when batch has force_transform flag', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'batch-force-1',
         'raw_data' => [
-            'campaignid' => 'batch-force-1',
+            'external_id' => 'batch-force-1',
             'name' => 'Batch Force Test',
-            'total_sent' => 100,
+            'sent' => 100,
         ],
     ]);
 

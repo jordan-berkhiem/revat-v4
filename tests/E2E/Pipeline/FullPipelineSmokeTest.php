@@ -97,23 +97,23 @@ it('flows data through the entire pipeline: extract -> transform -> attribute ->
         'integration_id' => $campaignIntegration->id,
         'external_id' => 'camp-pipeline-1',
         'raw_data' => [
-            'campaignid' => 'camp-pipeline-1',
+            'external_id' => 'camp-pipeline-1',
             'name' => 'Pipeline Welcome',
             'subject' => 'Welcome!',
             'from_name' => 'Pipeline Team',
             'from_email' => $sharedEmail,
             'type' => 'regular',
-            'total_sent' => 2000,
+            'sent' => 2000,
             'delivered' => 1900,
-            'bounced' => 40,
+            'bounces' => 40,
             'complaints' => 3,
             'unsubscribes' => 10,
             'opens' => 600,
             'unique_opens' => 400,
             'clicks' => 100,
             'unique_clicks' => 70,
-            'revenue' => 200.00,
-            'send_date' => $sentDate->toIso8601String(),
+            'platform_revenue' => 200.00,
+            'sent_at' => $sentDate->toIso8601String(),
         ],
     ]);
 
@@ -122,11 +122,11 @@ it('flows data through the entire pipeline: extract -> transform -> attribute ->
         'integration_id' => $conversionIntegration->id,
         'external_id' => $sharedEmail,
         'raw_data' => [
-            'conversionId' => $sharedEmail,
+            'external_id' => $sharedEmail,
             'revenue' => 300.00,
             'payout' => 120.00,
             'cost' => 30.00,
-            'conversionTimestamp' => now()->subDays(3)->toIso8601String(),
+            'converted_at' => now()->subDays(3)->toIso8601String(),
         ],
     ]);
 

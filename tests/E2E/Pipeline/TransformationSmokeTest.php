@@ -39,23 +39,23 @@ it('transforms campaign email raw data into fact table records', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'camp-001',
         'raw_data' => [
-            'campaignid' => 'camp-001',
+            'external_id' => 'camp-001',
             'name' => 'Welcome Campaign',
             'subject' => 'Welcome to Acme',
             'from_name' => 'Acme Marketing',
             'from_email' => 'hello@acme.test',
             'type' => 'regular',
-            'total_sent' => 1000,
+            'sent' => 1000,
             'delivered' => 950,
-            'bounced' => 20,
+            'bounces' => 20,
             'complaints' => 2,
             'unsubscribes' => 5,
             'opens' => 400,
             'unique_opens' => 300,
             'clicks' => 80,
             'unique_clicks' => 60,
-            'revenue' => 150.00,
-            'send_date' => now()->subDays(5)->toIso8601String(),
+            'platform_revenue' => 150.00,
+            'sent_at' => now()->subDays(5)->toIso8601String(),
         ],
     ]);
 
@@ -101,11 +101,11 @@ it('transforms conversion sale raw data into fact table records', function () {
         'integration_id' => $conversionIntegration->id,
         'external_id' => 'conv-001',
         'raw_data' => [
-            'conversionId' => 'conv-001',
+            'external_id' => 'conv-001',
             'revenue' => 250.00,
             'payout' => 100.00,
             'cost' => 25.00,
-            'conversionTimestamp' => now()->subDays(3)->toIso8601String(),
+            'converted_at' => now()->subDays(3)->toIso8601String(),
         ],
     ]);
 

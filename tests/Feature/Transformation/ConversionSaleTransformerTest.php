@@ -48,11 +48,11 @@ it('transforms Voluum raw data to normalized fact record', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-123',
         'raw_data' => [
-            'conversionId' => 'vol-123',
+            'external_id' => 'vol-123',
             'revenue' => 49.99,
             'cost' => 10.00,
             'payout' => 25.00,
-            'conversionTimestamp' => '2026-02-15T14:30:00Z',
+            'converted_at' => '2026-02-15T14:30:00Z',
             'email' => 'buyer@example.com',
         ],
     ]);
@@ -84,7 +84,7 @@ it('resolves identity_hash_id from subscriber email in payload', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-hash',
         'raw_data' => [
-            'conversionId' => 'vol-hash',
+            'external_id' => 'vol-hash',
             'revenue' => 100,
             'email' => 'subscriber@example.com',
         ],
@@ -108,7 +108,7 @@ it('sets identity_hash_id to NULL when no email available', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-no-email',
         'raw_data' => [
-            'conversionId' => 'vol-no-email',
+            'external_id' => 'vol-no-email',
             'revenue' => 100,
             // No email field
         ],
@@ -128,7 +128,7 @@ it('normalizes monetary fields from strings to decimals', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-money',
         'raw_data' => [
-            'conversionId' => 'vol-money',
+            'external_id' => 'vol-money',
             'revenue' => '$49.99',
             'cost' => '10.50',
             'payout' => 25,
@@ -151,7 +151,7 @@ it('preserves NULL for missing monetary fields', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-sparse',
         'raw_data' => [
-            'conversionId' => 'vol-sparse',
+            'external_id' => 'vol-sparse',
             'revenue' => 100,
             // No cost or payout
         ],
@@ -173,7 +173,7 @@ it('updates existing sale on re-transformation without duplicating', function ()
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-upsert',
         'raw_data' => [
-            'conversionId' => 'vol-upsert',
+            'external_id' => 'vol-upsert',
             'revenue' => 100,
         ],
     ]);
@@ -187,7 +187,7 @@ it('updates existing sale on re-transformation without duplicating', function ()
     // Update raw data and re-transform
     $rawData->update([
         'raw_data' => [
-            'conversionId' => 'vol-upsert',
+            'external_id' => 'vol-upsert',
             'revenue' => 200,
         ],
     ]);
@@ -207,7 +207,7 @@ it('creates archive snapshot during transformation', function () {
         'integration_id' => $this->integration->id,
         'external_id' => 'vol-archive',
         'raw_data' => [
-            'conversionId' => 'vol-archive',
+            'external_id' => 'vol-archive',
             'revenue' => 50,
             'extra_field' => 'preserved',
         ],
