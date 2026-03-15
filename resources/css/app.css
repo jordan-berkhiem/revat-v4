@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Plus Jakarta Sans — variable font (weights 300-700) */
+@font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-weight: 300 700;
+    font-style: normal;
+    font-display: swap;
+    src: url('../fonts/plus-jakarta-sans-latin.woff2') format('woff2');
+}
+
+/* IBM Plex Mono — Regular */
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-mono-400.woff2') format('woff2');
+}
+
+/* IBM Plex Mono — Medium */
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-mono-500.woff2') format('woff2');
+}
+
+@theme {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --color-accent: #2563EB;
+    --color-accent-hover: #1d4ed8;
+}
