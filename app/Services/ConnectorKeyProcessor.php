@@ -53,10 +53,13 @@ class ConnectorKeyProcessor
             }
         }
 
-        // Process records with composite keys
+        // Process records matching the connector's campaign data type
         if ($campaignIntegration) {
-            $this->processCampaignRecords($connector, $campaignFields);
-            $this->processCampaignClickRecords($connector, $campaignFields);
+            if ($connector->campaign_data_type === 'campaign_emails') {
+                $this->processCampaignRecords($connector, $campaignFields);
+            } elseif ($connector->campaign_data_type === 'campaign_email_clicks') {
+                $this->processCampaignClickRecords($connector, $campaignFields);
+            }
         }
 
         if ($conversionIntegration) {

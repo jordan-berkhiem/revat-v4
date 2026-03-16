@@ -13,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -44,6 +45,8 @@ class ProcessAttribution implements ShouldBeUnique, ShouldQueue
 
     public function handle(ConnectorKeyProcessor $keyProcessor, EffortResolver $effortResolver, AttributionEngine $engine): void
     {
+        $this->linkClicksToCampaigns();
+
         $connectors = $this->resolveConnectors();
         $models = $this->resolveModels();
 
@@ -131,6 +134,34 @@ class ProcessAttribution implements ShouldBeUnique, ShouldQueue
             ->where('sync_in_progress', true)
             ->where('last_sync_status', 'attributing')
             ->each(fn (Integration $i) => $i->markSyncFailed('Attribution processing failed.'));
+    }
+
+    /**
+     * Link campaign_email_clicks to their parent campaign_emails.
+     *
+     * Clicks may be transformed before campaigns due to async queue processing,
+     * leaving campaign_email_id NULL. This bulk update resolves those orphans
+     * by matching on integration_id + external_campaign_id.
+     */
+    protected function linkClicksToCampaigns(): void
+    {
+        $updated = DB::update('
+            UPDATE campaign_email_clicks cec
+            JOIN campaign_email_click_raw_data cecrd ON cecrd.id = cec.raw_data_id
+            JOIN campaign_emails ce
+                ON ce.integration_id = cec.integration_id
+                AND ce.external_id = cecrd.external_campaign_id
+                AND ce.deleted_at IS NULL
+            SET cec.campaign_email_id = ce.id
+            WHERE cec.campaign_email_id IS NULL
+              AND cec.workspace_id = ?
+        ', [$this->workspace->id]);
+
+        if ($updated > 0) {
+            Log::info("ProcessAttribution: Linked {$updated} orphaned clicks to campaign emails", [
+                'workspace_id' => $this->workspace->id,
+            ]);
+        }
     }
 
     /**
