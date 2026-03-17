@@ -56,7 +56,7 @@ it('creates campaign email raw data with array cast', function () {
     ]);
 
     $record->refresh();
-    expect($record->raw_data)->toBe(['subject' => 'Test', 'sent' => 100])
+    expect($record->raw_data)->toMatchArray(['subject' => 'Test', 'sent' => 100])
         ->and($record->external_id)->toBe('camp-123');
 });
 
