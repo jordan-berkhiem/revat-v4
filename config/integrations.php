@@ -24,7 +24,7 @@ return [
             'description' => 'Email marketing & CRM automation',
             'data_types' => ['campaign_emails', 'campaign_email_clicks'],
             'credential_fields' => [
-                ['key' => 'api_url', 'label' => 'Account Name', 'type' => 'text', 'placeholder' => 'e.g. mycompany (from mycompany.activehosted.com)'],
+                ['key' => 'api_url', 'label' => 'URL', 'type' => 'text', 'placeholder' => 'e.g. https://thejorni.api-us1.com'],
                 ['key' => 'api_key', 'label' => 'API Key', 'type' => 'password', 'placeholder' => 'Enter your API key'],
             ],
         ],
