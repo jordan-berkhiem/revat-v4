@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\Workspace;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 
 beforeEach(function () {
@@ -159,8 +160,10 @@ it('can rollback the ETL column migrations cleanly', function () {
     expect(Schema::hasColumn('campaign_emails', 'extraction_batch_id'))->toBeTrue();
     expect(Schema::hasColumn('campaign_emails', 'transformed_at'))->toBeTrue();
 
-    // Rollback the ETL column migrations (1 last_summarized_at + 6 summary tables + 2 incremental processing + 3 ETL columns)
-    Artisan::call('migrate:rollback', ['--step' => 12]);
+    // Rollback from the first ETL column migration to the end (includes ETL columns + all later migrations)
+    $migrations = collect(File::files(database_path('migrations')))->map->getFilename()->sort()->values();
+    $etlIndex = $migrations->search(fn ($f) => str_contains($f, 'add_etl_columns_to_campaign_emails'));
+    Artisan::call('migrate:rollback', ['--step' => $migrations->count() - $etlIndex]);
 
     expect(Schema::hasColumn('campaign_emails', 'extraction_batch_id'))->toBeFalse();
     expect(Schema::hasColumn('campaign_emails', 'transformed_at'))->toBeFalse();

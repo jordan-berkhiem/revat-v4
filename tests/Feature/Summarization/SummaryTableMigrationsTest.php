@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 
 // ── summary_campaign_daily ────────────────────────────────────────────
@@ -134,8 +135,10 @@ it('can rollback summary table migrations', function () {
     expect(Schema::hasTable('summary_workspace_daily'))->toBeTrue();
     expect(Schema::hasTable('summary_attribution_by_campaign'))->toBeTrue();
 
-    // Roll back all migrations from summary tables onwards (11 total)
-    Artisan::call('migrate:rollback', ['--step' => 11]);
+    // Roll back all migrations from the first summary table migration onwards
+    $migrations = collect(File::files(database_path('migrations')))->map->getFilename()->sort()->values();
+    $summaryIndex = $migrations->search(fn ($f) => str_contains($f, 'create_summary_campaign_daily'));
+    Artisan::call('migrate:rollback', ['--step' => $migrations->count() - $summaryIndex]);
 
     expect(Schema::hasTable('summary_campaign_daily'))->toBeFalse();
     expect(Schema::hasTable('summary_conversion_daily'))->toBeFalse();
