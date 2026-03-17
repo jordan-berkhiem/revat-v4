@@ -96,6 +96,7 @@ function seedAttributionData(
         'integration_id' => $campaignIntegration->id,
         'external_id' => 'camp-' . $email,
         'from_email' => $email,
+        'sent_at' => now()->subDays(5),
     ]);
 
     CampaignEmailClick::create([
