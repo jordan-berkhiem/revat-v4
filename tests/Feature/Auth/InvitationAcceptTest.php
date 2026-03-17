@@ -3,6 +3,7 @@
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\InvitationService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Volt\Volt;
 use Spatie\Permission\Models\Role;
@@ -16,6 +17,9 @@ beforeEach(function () {
     foreach (['owner', 'admin', 'editor', 'viewer'] as $role) {
         Role::findOrCreate($role, 'web');
     }
+
+    // Clear rate limiter to prevent throttle state leaking between tests
+    Cache::flush();
 });
 
 function createTestInvitation(
