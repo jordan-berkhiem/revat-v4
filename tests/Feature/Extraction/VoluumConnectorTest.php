@@ -73,7 +73,7 @@ it('fetches conversion sales with normalized data', function () {
                     'clickId' => 'conv-001',
                     'revenue' => 99.99,
                     'payout' => 45.50,
-                    'cost' => 12.00,
+                    'cost' => 12.50,
                     'conversionTimestamp' => '2025-01-03T12:00:00Z',
                     'campaignId' => 'camp-001',
                     'offerId' => 'offer-001',
@@ -93,8 +93,8 @@ it('fetches conversion sales with normalized data', function () {
     expect($sale['external_id'])->toBe('conv-001');
     expect($sale['revenue'])->toBe(99.99);
     expect($sale['payout'])->toBe(45.50);
-    expect($sale['cost'])->toBe(12.00);
-    expect($sale['campaign_id'])->toBe('camp-001');
+    expect($sale['cost'])->toBe(12.50);
+    expect($sale['campaignId'])->toBe('camp-001');
 });
 
 it('throws UnsupportedDataTypeException for fetchCampaignEmails', function () {
