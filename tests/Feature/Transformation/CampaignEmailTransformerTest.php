@@ -41,7 +41,7 @@ beforeEach(function () {
 // ── ActiveCampaign Transformation ─────────────────────────────────────
 
 it('transforms ActiveCampaign raw data to normalized fact record', function () {
-    // Raw data uses the same keys the ActiveCampaign connector outputs
+    // Raw data uses the original ActiveCampaign API field names
     CampaignEmailRawData::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->integration->id,
@@ -50,20 +50,17 @@ it('transforms ActiveCampaign raw data to normalized fact record', function () {
             'external_id' => 'ac-123',
             'name' => 'Welcome Email',
             'subject' => 'Welcome aboard!',
-            'from_name' => 'Support',
-            'from_email' => 'support@example.com',
-            'type' => 'single',
-            'sent' => 1000,
+            'fromname' => 'Support',
+            'fromemail' => 'support@example.com',
+            'send_amt' => 1000,
             'delivered' => 950,
-            'bounces' => 50,
-            'complaints' => 2,
+            '_bounces' => 50,
             'unsubscribes' => 5,
             'opens' => 300,
-            'unique_opens' => 250,
-            'clicks' => 100,
-            'unique_clicks' => 80,
-            'platform_revenue' => 500.50,
-            'sent_at' => '2026-01-15T10:00:00Z',
+            'uniqueopens' => 250,
+            'linkclicks' => 100,
+            'uniquelinkclicks' => 80,
+            'sdate' => '2026-01-15T10:00:00Z',
         ],
     ]);
 
@@ -79,17 +76,14 @@ it('transforms ActiveCampaign raw data to normalized fact record', function () {
     expect($email->subject)->toBe('Welcome aboard!');
     expect($email->from_name)->toBe('Support');
     expect($email->from_email)->toBe('support@example.com');
-    expect($email->type)->toBe('single');
     expect($email->sent)->toBe(1000);
     expect($email->delivered)->toBe(950);
     expect($email->bounced)->toBe(50);
-    expect($email->complaints)->toBe(2);
     expect($email->unsubscribes)->toBe(5);
     expect($email->opens)->toBe(300);
     expect($email->unique_opens)->toBe(250);
     expect($email->clicks)->toBe(100);
     expect($email->unique_clicks)->toBe(80);
-    expect((float) $email->platform_revenue)->toBe(500.50);
     expect($email->sent_at)->not->toBeNull();
     expect($email->extraction_batch_id)->toBe($this->batch->id);
     expect($email->transformed_at)->not->toBeNull();
@@ -102,30 +96,26 @@ it('transforms ActiveCampaign raw data to normalized fact record', function () {
 it('transforms ExpertSender raw data using connector-normalized fields', function () {
     $this->integration->update(['platform' => 'expertsender']);
 
-    // Raw data uses the same keys the ExpertSender connector outputs
-    // (connector normalizes PascalCase API fields to snake_case)
+    // Raw data uses the original ExpertSender PascalCase API field names
     CampaignEmailRawData::create([
         'workspace_id' => $this->workspace->id,
         'integration_id' => $this->integration->id,
         'external_id' => 'es-456',
         'raw_data' => [
             'external_id' => 'es-456',
-            'name' => 'Newsletter',
-            'subject' => 'Monthly Update',
-            'from_name' => 'Team',
-            'from_email' => 'team@example.com',
-            'type' => 'newsletter',
-            'sent' => 2000,
-            'delivered' => 1900,
-            'bounces' => 100,
-            'complaints' => 3,
-            'unsubscribes' => 10,
-            'opens' => 500,
-            'unique_opens' => 400,
-            'clicks' => 200,
-            'unique_clicks' => 150,
-            'platform_revenue' => 1200.00,
-            'sent_at' => '2026-02-01 08:00:00',
+            'Tags' => 'Newsletter',
+            'Subject' => 'Monthly Update',
+            'FromName' => 'Team',
+            'FromEmail' => 'team@example.com',
+            'Sent' => 2000,
+            'Delivered' => 1900,
+            'Bounced' => 100,
+            'Unsubscribes' => 10,
+            'Opens' => 500,
+            'UniqueOpens' => 400,
+            'Clicks' => 200,
+            'UniqueClicks' => 150,
+            'SentDate' => '2026-02-01 08:00:00',
         ],
     ]);
 
@@ -176,8 +166,8 @@ it('updates existing fact record on re-transformation without duplicating', func
             'external_id' => 'ac-789',
             'name' => 'Original Name',
             'subject' => 'Original Subject',
-            'sent' => 100,
-            'sent_at' => '2026-01-01',
+            'send_amt' => 100,
+            'sdate' => '2026-01-01',
         ],
     ]);
 
@@ -193,8 +183,8 @@ it('updates existing fact record on re-transformation without duplicating', func
             'external_id' => 'ac-789',
             'name' => 'Updated Name',
             'subject' => 'Updated Subject',
-            'sent' => 200,
-            'sent_at' => '2026-01-01',
+            'send_amt' => 200,
+            'sdate' => '2026-01-01',
         ],
     ]);
 
@@ -216,8 +206,8 @@ it('preserves NULL for missing metric fields', function () {
         'raw_data' => [
             'external_id' => 'ac-null',
             'name' => 'Sparse Email',
-            'sent' => 500,
-            // No delivered, bounced, complaints, etc.
+            'send_amt' => 500,
+            // No delivered, bounced, etc.
         ],
     ]);
 
@@ -248,7 +238,7 @@ it('creates archive snapshot during transformation', function () {
         'raw_data' => [
             'external_id' => 'ac-archive',
             'name' => 'Archive Test',
-            'sent' => 100,
+            'send_amt' => 100,
         ],
     ]);
 
@@ -275,7 +265,7 @@ it('processes records in configurable chunks', function () {
             'raw_data' => [
                 'external_id' => "chunk-{$i}",
                 'name' => "Email {$i}",
-                'sent' => $i * 100,
+                'send_amt' => $i * 100,
             ],
         ]);
     }
@@ -307,7 +297,7 @@ it('handles various timestamp formats', function () {
         'raw_data' => [
             'external_id' => 'ts-iso',
             'name' => 'ISO Date',
-            'sent_at' => '2026-03-01T12:00:00Z',
+            'sdate' => '2026-03-01T12:00:00Z',
         ],
     ]);
 
