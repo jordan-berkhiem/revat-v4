@@ -261,7 +261,7 @@ new class extends Component
             <div class="max-w-md space-y-5">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Integration Name</label>
-                    <flux:input wire:model="name" type="text" placeholder="e.g. My Mailchimp Account" />
+                    <flux:input wire:model="name" type="text" placeholder="e.g. My {{ $platforms[$platform]['label'] ?? '' }} Account" />
                     @error('name') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
 
