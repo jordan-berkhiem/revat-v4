@@ -107,11 +107,20 @@ class ActiveCampaignConnector extends BasePlatformConnector
             $record['fromname'] = $sender['fromname'] ?? '';
             $record['fromemail'] = $sender['fromemail'] ?? '';
 
-            // Computed: total bounces (hard + soft)
-            $record['_bounces'] = (int) ($campaign['hardbounces'] ?? 0) + (int) ($campaign['softbounces'] ?? 0);
+            // Computed fields for the pipeline
+            $record['from_name'] = $record['fromname'];
+            $record['from_email'] = $record['fromemail'];
+            $record['type'] = $this->resolveCampaignType($campaign);
+            $record['status'] = $this->resolveStatus($campaign);
+            $record['sent'] = (int) ($campaign['send_amt'] ?? 0);
+            $record['delivered'] = (int) ($campaign['delivered'] ?? 0);
+            $record['opens'] = (int) ($campaign['opens'] ?? 0);
+            $record['clicks'] = (int) ($campaign['linkclicks'] ?? 0);
+            $record['bounces'] = (int) ($campaign['hardbounces'] ?? 0) + (int) ($campaign['softbounces'] ?? 0);
+            $record['_bounces'] = $record['bounces'];
 
             // Hash emails except sender
-            $record = $this->hashEmails($record, ['fromemail']);
+            $record = $this->hashEmails($record, ['fromemail', 'from_email']);
 
             $campaigns->push($record);
         }
@@ -214,7 +223,9 @@ class ActiveCampaignConnector extends BasePlatformConnector
                     $record['external_campaign_id'] = $campaignId;
                     $record['subscriber_email_hash'] = hash('sha256', $email);
 
+                    $record['clicked_at'] = $clickedAt;
                     $clickUrl = $link['link'] ?? '';
+                    $record['click_url'] = $clickUrl;
                     $urlParams = [];
                     $parsedUrl = parse_url($clickUrl);
                     if (isset($parsedUrl['query'])) {

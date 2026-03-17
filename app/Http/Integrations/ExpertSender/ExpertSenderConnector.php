@@ -155,9 +155,19 @@ class ExpertSenderConnector extends BasePlatformConnector
 
             // Add computed fields for the pipeline
             $record['external_id'] = (string) $msgId;
+            $record['name'] = $meta['Tags'] ?? '';
+            $record['subject'] = $meta['Subject'] ?? '';
+            $record['from_name'] = $meta['FromName'] ?? '';
+            $record['from_email'] = $meta['FromEmail'] ?? '';
+            $record['type'] = $this->resolveCampaignType($meta['Type'] ?? '');
+            $record['sent'] = (int) ($stats['Sent'] ?? 0);
+            $record['delivered'] = (int) ($stats['Delivered'] ?? 0);
+            $record['opens'] = (int) ($stats['Opens'] ?? 0);
+            $record['clicks'] = (int) ($stats['Clicks'] ?? 0);
+            $record['bounces'] = (int) ($stats['Bounced'] ?? 0);
 
             // Hash emails except sender
-            $record = $this->hashEmails($record, ['FromEmail', 'fromEmail']);
+            $record = $this->hashEmails($record, ['FromEmail', 'fromEmail', 'from_email']);
 
             $campaigns->push($record);
         }
