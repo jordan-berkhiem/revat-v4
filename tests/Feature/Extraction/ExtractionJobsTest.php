@@ -142,9 +142,9 @@ it('upserts records into correct raw data table', function () {
     expect($rawData)->not->toBeNull();
     expect($rawData->external_id)->toBe('ext-001');
 
-    // Verify batch was completed
+    // Batch stays 'extracted' until transformation completes the lifecycle
     $batch->refresh();
-    expect($batch->status)->toBe(ExtractionBatch::STATUS_COMPLETED);
+    expect($batch->status)->toBe(ExtractionBatch::STATUS_EXTRACTED);
     expect($batch->records_count)->toBe(1);
 });
 
