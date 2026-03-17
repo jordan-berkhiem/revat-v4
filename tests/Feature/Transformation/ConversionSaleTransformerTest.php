@@ -52,7 +52,7 @@ it('transforms Voluum raw data to normalized fact record', function () {
             'revenue' => 49.99,
             'cost' => 10.00,
             'payout' => 25.00,
-            'converted_at' => '2026-02-15T14:30:00Z',
+            'postbackTimestamp' => '2026-02-15T14:30:00Z',
             'email' => 'buyer@example.com',
         ],
     ]);

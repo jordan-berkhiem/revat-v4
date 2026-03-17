@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 
 it('can rollback and re-migrate foundation migrations cleanly', function () {
@@ -9,8 +10,10 @@ it('can rollback and re-migrate foundation migrations cleanly', function () {
     expect(Schema::hasTable('organization_user'))->toBeTrue();
     expect(Schema::hasTable('workspace_user'))->toBeTrue();
 
-    // Rollback all custom migrations (1 last_summarized_at + 6 summary tables + 2 incremental processing + 3 ETL columns on fact tables + 3 archive tables + 1 identity_hashes + 3 raw data + 2 extraction pipeline + 1 integrations + 1 last_active_at + 1 effort_id on campaign_emails + 4 attribution + 3 fact tables + 3 PIE + 3 billing + 1 invitations + 2 admin + 5 foundation + 1 audit_logs + 2 user_2fa)
-    Artisan::call('migrate:rollback', ['--step' => 48]);
+    // Rollback all custom migrations (everything after the 3 Laravel default migrations)
+    $totalMigrations = count(File::files(database_path('migrations')));
+    $laravelDefaults = 3; // users, cache, jobs
+    Artisan::call('migrate:rollback', ['--step' => $totalMigrations - $laravelDefaults]);
 
     // Verify pivot and workspaces tables are gone
     expect(Schema::hasTable('workspace_user'))->toBeFalse();

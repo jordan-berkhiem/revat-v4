@@ -24,6 +24,7 @@ class ConversionSaleFieldMap
             'cost' => 'cost',
             'payout' => 'payout',
             'postbackTimestamp' => 'converted_at',
+            'email' => '_subscriber_email',
         ],
     ];
 

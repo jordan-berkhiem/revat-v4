@@ -70,7 +70,7 @@ it('merges campaign emails via SQL with content hash', function () {
     expect($first->workspace_id)->toBe($this->workspace->id);
 
     $batch->refresh();
-    expect($batch->status)->toBe(ExtractionBatch::STATUS_COMPLETED);
+    expect($batch->status)->toBe(ExtractionBatch::STATUS_EXTRACTED);
     expect($batch->records_count)->toBe(2);
 });
 
@@ -108,7 +108,7 @@ it('merges campaign email clicks via SQL with content hash', function () {
     expect($row->content_hash)->toHaveLength(64);
 
     $batch->refresh();
-    expect($batch->status)->toBe(ExtractionBatch::STATUS_COMPLETED);
+    expect($batch->status)->toBe(ExtractionBatch::STATUS_EXTRACTED);
 });
 
 it('merges conversion sales via SQL with content hash', function () {
@@ -138,7 +138,7 @@ it('merges conversion sales via SQL with content hash', function () {
     expect($row->content_hash)->toHaveLength(64);
 
     $batch->refresh();
-    expect($batch->status)->toBe(ExtractionBatch::STATUS_COMPLETED);
+    expect($batch->status)->toBe(ExtractionBatch::STATUS_EXTRACTED);
 });
 
 it('updates existing rows on duplicate key without creating duplicates', function () {
@@ -230,7 +230,7 @@ it('marks batch completed with zero records', function () {
     expect($batch->status)->toBe(ExtractionBatch::STATUS_COMPLETED);
 });
 
-it('marks integration data type completed after successful merge', function () {
+it('marks integration data type as loaded after successful merge', function () {
     $batch = ExtractionBatch::create([
         'integration_id' => $this->integration->id,
         'workspace_id' => $this->workspace->id,
@@ -250,5 +250,5 @@ it('marks integration data type completed after successful merge', function () {
     (new UpsertRawData($batch))->handle();
 
     $this->integration->refresh();
-    expect($this->integration->sync_statuses['campaign_emails'])->toBe('completed');
+    expect($this->integration->sync_statuses['campaign_emails'])->toBe('loaded');
 });

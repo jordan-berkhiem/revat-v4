@@ -77,6 +77,13 @@ class MaropostConnector extends BasePlatformConnector
 
             // Add computed fields for the pipeline
             $record['external_id'] = $id;
+            $record['type'] = $this->resolveCampaignType($campaign);
+            $record['status'] = $this->resolveStatus($campaign);
+            $record['sent'] = (int) ($campaign['total_sent'] ?? 0);
+            $record['delivered'] = (int) ($campaign['total_delivered'] ?? 0);
+            $record['opens'] = (int) ($campaign['total_opens'] ?? 0);
+            $record['clicks'] = (int) ($campaign['total_clicks'] ?? 0);
+            $record['bounces'] = (int) ($campaign['total_bounces'] ?? 0);
 
             // Hash emails except sender
             $record = $this->hashEmails($record, ['from_email']);
@@ -215,6 +222,7 @@ class MaropostConnector extends BasePlatformConnector
             $record['subscriber_email_hash'] = hash('sha256', $email);
 
             $clickUrl = $record['url'] ?? '';
+            $record['click_url'] = $clickUrl;
             $urlParams = [];
             $parsedUrl = parse_url($clickUrl);
             if (isset($parsedUrl['query'])) {
