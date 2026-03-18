@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Organization;
+use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
@@ -17,17 +18,26 @@ class OrganizationSetupService
      * to both via pivot tables, assigns the owner role (scoped to the org),
      * and sets current_organization_id on the user.
      *
-     * @param  array{name: string, timezone: string}  $data
+     * @param  array{name: string, timezone: string, plan_slug?: string, workspace_name?: string}  $data
      */
     public function setup(User $user, array $data): Organization
     {
         return DB::transaction(function () use ($user, $data) {
-            $organization = Organization::create([
+            $orgData = [
                 'name' => $data['name'],
                 'timezone' => $data['timezone'] ?? 'UTC',
-            ]);
+            ];
 
-            $workspaceName = $organization->name.' Workspace';
+            if (! empty($data['plan_slug'])) {
+                $plan = Plan::where('slug', $data['plan_slug'])->first();
+                if ($plan) {
+                    $orgData['plan_id'] = $plan->id;
+                }
+            }
+
+            $organization = Organization::create($orgData);
+
+            $workspaceName = $data['workspace_name'] ?? $organization->name.' Workspace';
             $workspace = new Workspace(['name' => $workspaceName]);
             $workspace->organization_id = $organization->id;
             $workspace->is_default = true;

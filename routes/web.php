@@ -155,8 +155,8 @@ Route::middleware('auth')->group(function () {
 
 // ── Onboarding Routes ──────────────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/onboarding/create-organization', fn () => view('pages.onboarding.create-organization'))
-        ->name('onboarding.create-organization')
+    Route::get('/onboarding', fn () => view('pages.onboarding.create-organization'))
+        ->name('onboarding')
         ->middleware('throttle:5,1');
 });
 
