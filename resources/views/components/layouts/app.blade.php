@@ -40,7 +40,10 @@
                 <flux:sidebar.item href="{{ route('attribution.stats') }}" :current="request()->routeIs('attribution.stats')" data-testid="nav-attribution-stats">Stats</flux:sidebar.item>
             </flux:sidebar.group>
             <flux:sidebar.item icon="puzzle-piece" href="{{ route('integrations') }}" :current="request()->routeIs('integrations', 'integrations.*')" data-testid="nav-integrations">Integrations</flux:sidebar.item>
-            <flux:sidebar.item icon="cog-6-tooth" href="{{ route('settings.profile') }}" :current="request()->routeIs('settings.*')" data-testid="nav-settings">Settings</flux:sidebar.item>
+            @can('manage')
+                <flux:sidebar.item icon="square-3-stack-3d" href="{{ route('settings.workspaces') }}" :current="request()->routeIs('settings.workspaces*')" data-testid="nav-workspaces">Workspaces</flux:sidebar.item>
+            @endcan
+            <flux:sidebar.item icon="cog-6-tooth" href="{{ route('settings.profile') }}" :current="request()->routeIs('settings.*') && !request()->routeIs('settings.workspaces*')" data-testid="nav-settings">Settings</flux:sidebar.item>
         </flux:sidebar.nav>
 
         <flux:spacer />
