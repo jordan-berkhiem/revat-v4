@@ -50,6 +50,10 @@ class Workspace extends Model
 
     /**
      * Count all users with access to this workspace (explicit + implicit).
+     *
+     * Explicit members are in the workspace_user pivot. Implicit members are
+     * org-level owner/admin users not already in the pivot — resolved via a
+     * direct join on model_has_roles to avoid N+1 queries.
      */
     public function totalMemberCount(): int
     {
@@ -58,13 +62,21 @@ class Workspace extends Model
         $org = $this->organization;
         $explicitUserIds = $this->users()->pluck('users.id');
 
-        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($org->id);
+        // Count org members with owner/admin roles scoped to this org (team_id)
+        // who are not already in the explicit pivot. Roles themselves have no
+        // team_id — the team scope lives on model_has_roles.team_id.
+        $adminRoleIds = \Spatie\Permission\Models\Role::whereIn('name', ['owner', 'admin'])
+            ->pluck('id');
+
         $implicitCount = $org->users()
             ->whereNotIn('users.id', $explicitUserIds)
-            ->get()
-            ->filter(function ($user) {
-                $user->unsetRelation('roles');
-                return $user->hasRole(['owner', 'admin']);
+            ->whereExists(function ($query) use ($adminRoleIds, $org) {
+                $query->select(DB::raw(1))
+                    ->from('model_has_roles')
+                    ->whereColumn('model_has_roles.model_id', 'users.id')
+                    ->where('model_has_roles.model_type', (new \App\Models\User)->getMorphClass())
+                    ->where('model_has_roles.team_id', $org->id)
+                    ->whereIn('model_has_roles.role_id', $adminRoleIds);
             })
             ->count();
 

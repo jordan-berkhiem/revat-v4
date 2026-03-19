@@ -185,7 +185,10 @@ class WorkspaceContext
             return $this->accessibleCache[$cacheKey];
         }
 
-        // Owner/admin get implicit access to all org workspaces
+        // Owner/admin get implicit access to all org workspaces.
+        // setPermissionsTeamId() scopes subsequent role checks to this org.
+        // unsetRelation('roles') clears any cached roles from a previous team
+        // context so Spatie re-queries with the new team_id.
         app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
         $user->unsetRelation('roles');
 
