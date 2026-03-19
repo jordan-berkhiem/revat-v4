@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\AlphaInviteResource\Pages;
 use App\Models\AlphaInvite;
 use App\Services\AlphaInviteService;
+use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -82,7 +83,7 @@ class AlphaInviteResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\Action::make('resend')
+                Action::make('resend')
                     ->icon('heroicon-o-arrow-path')
                     ->requiresConfirmation()
                     ->visible(fn (AlphaInvite $record) => $record->isPending())
@@ -90,7 +91,7 @@ class AlphaInviteResource extends Resource
                         app(AlphaInviteService::class)->resend($record);
                         Notification::make()->title('Invite resent')->success()->send();
                     }),
-                Tables\Actions\Action::make('revoke')
+                Action::make('revoke')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
