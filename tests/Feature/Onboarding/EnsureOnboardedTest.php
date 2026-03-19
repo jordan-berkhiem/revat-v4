@@ -14,7 +14,7 @@ it('redirects unonboarded user to onboarding page', function () {
 
     $this->actingAs($user)
         ->get(route('dashboard'))
-        ->assertRedirect(route('onboarding.create-organization'));
+        ->assertRedirect(route('onboarding'));
 });
 
 it('allows onboarded user to pass through', function () {
@@ -39,7 +39,7 @@ it('allows unonboarded user to access onboarding route', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
 
     $this->actingAs($user)
-        ->get(route('onboarding.create-organization'))
+        ->get(route('onboarding'))
         ->assertOk();
 });
 

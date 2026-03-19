@@ -89,11 +89,11 @@ it('applies rate limiting to the onboarding route', function () {
 
     // Make requests up to the limit — throttle is 5 per minute
     for ($i = 0; $i < 5; $i++) {
-        $response = $this->get(route('onboarding.create-organization'));
+        $response = $this->get(route('onboarding'));
         $response->assertStatus(200);
     }
 
     // 6th request should be throttled
-    $response = $this->get(route('onboarding.create-organization'));
+    $response = $this->get(route('onboarding'));
     $response->assertStatus(429);
 });

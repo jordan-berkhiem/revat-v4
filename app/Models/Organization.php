@@ -17,7 +17,7 @@ class Organization extends Model
 {
     use Billable, SoftDeletes;
 
-    protected $fillable = ['name', 'timezone'];
+    protected $fillable = ['name', 'timezone', 'plan_id'];
 
     protected $attributes = [
         'support_access_enabled' => false,

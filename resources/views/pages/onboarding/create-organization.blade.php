@@ -1,25 +1,83 @@
 <?php
 
+use App\Models\Plan;
 use App\Services\OrganizationSetupService;
 use Livewire\Volt\Component;
 
 new class extends Component
 {
-    public string $name = '';
+    public int $step = 1;
+
+    public string $companyName = '';
 
     public string $timezone = 'UTC';
 
-    public function createOrganization(OrganizationSetupService $service): void
+    public string $planSlug = '';
+
+    public string $workspaceName = '';
+
+    public bool $hasPlans = false;
+
+    public function mount(): void
+    {
+        $plans = Plan::visible()->get();
+        $this->hasPlans = $plans->isNotEmpty();
+
+        if ($this->hasPlans) {
+            $this->planSlug = $plans->first()->slug;
+        }
+    }
+
+    public function nextStep(): void
+    {
+        if ($this->step === 1) {
+            $this->validate([
+                'companyName' => ['required', 'string', 'max:255', 'unique:organizations,name'],
+                'timezone' => ['required', 'string', 'timezone:all'],
+            ]);
+
+            // Auto-fill workspace name if empty
+            if (empty($this->workspaceName)) {
+                $this->workspaceName = $this->companyName;
+            }
+
+            // Skip plan step if no visible plans
+            $this->step = $this->hasPlans ? 2 : 3;
+        } elseif ($this->step === 2) {
+            $this->validate([
+                'planSlug' => ['required', 'exists:plans,slug'],
+            ]);
+
+            $this->step = 3;
+        }
+    }
+
+    public function previousStep(): void
+    {
+        if ($this->step === 3) {
+            $this->step = $this->hasPlans ? 2 : 1;
+        } elseif ($this->step === 2) {
+            $this->step = 1;
+        }
+    }
+
+    public function submit(OrganizationSetupService $service): void
     {
         $this->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:organizations,name'],
-            'timezone' => ['required', 'string', 'timezone:all'],
+            'workspaceName' => ['required', 'string', 'max:255'],
         ]);
 
-        $service->setup(auth()->user(), [
-            'name' => $this->name,
+        $data = [
+            'name' => $this->companyName,
             'timezone' => $this->timezone,
-        ]);
+            'workspace_name' => $this->workspaceName,
+        ];
+
+        if ($this->hasPlans && ! empty($this->planSlug)) {
+            $data['plan_slug'] = $this->planSlug;
+        }
+
+        $service->setup(auth()->user(), $data);
 
         $this->redirect(route('dashboard', absolute: false), navigate: true);
     }
@@ -42,40 +100,122 @@ new class extends Component
 
         return $result;
     }
+
+    public function getPlansProperty()
+    {
+        return Plan::visible()->get();
+    }
 }; ?>
 
 <x-layouts.onboarding>
-    <x-slot:title>Create Organization</x-slot:title>
+    <x-slot:title>Set Up Your Account</x-slot:title>
 
-    <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Create your organization</h1>
-        <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Set up your organization to get started with Revat.
-        </p>
-    </div>
-
-    @volt('onboarding.create-organization')
+    @volt('onboarding.wizard')
     <div>
-        <form wire:submit="createOrganization" class="space-y-6">
-            <flux:input
-                wire:model="name"
-                label="Organization name"
-                type="text"
-                placeholder="Your company or team name"
-                required
-                autofocus
-            />
+        {{-- Step indicator --}}
+        <div class="flex justify-center gap-2 mb-6">
+            @for ($i = 1; $i <= 3; $i++)
+                <div class="w-2.5 h-2.5 rounded-full {{ $i <= $step ? 'bg-zinc-900 dark:bg-white' : 'bg-zinc-300 dark:bg-zinc-600' }}"></div>
+            @endfor
+        </div>
 
-            <flux:select wire:model="timezone" label="Timezone" searchable>
-                @foreach ($this->timezones as $tz)
-                    <flux:select.option value="{{ $tz }}">{{ str_replace('_', ' ', $tz) }}</flux:select.option>
+        {{-- Step 1: Create your company --}}
+        @if ($step === 1)
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Create your company</h1>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    Tell us about your business to get started.
+                </p>
+            </div>
+
+            <form wire:submit="nextStep" class="space-y-6">
+                <flux:input
+                    wire:model="companyName"
+                    label="Company name"
+                    type="text"
+                    placeholder="Acme Inc."
+                    required
+                    autofocus
+                />
+
+                <flux:select wire:model="timezone" label="Timezone" searchable>
+                    @foreach ($this->timezones as $tz)
+                        <flux:select.option value="{{ $tz }}">{{ str_replace('_', ' ', $tz) }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <flux:button type="submit" variant="primary" class="w-full">
+                    Continue
+                </flux:button>
+            </form>
+        @endif
+
+        {{-- Step 2: Choose your plan --}}
+        @if ($step === 2)
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Choose your plan</h1>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    You can change this anytime. All plans include a 14-day free trial.
+                </p>
+            </div>
+
+            <div class="space-y-3 mb-6">
+                @foreach ($this->plans as $plan)
+                    <label
+                        class="flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors
+                            {{ $planSlug === $plan->slug
+                                ? 'border-zinc-900 dark:border-white ring-1 ring-zinc-900 dark:ring-white'
+                                : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500' }}"
+                        wire:key="plan-{{ $plan->slug }}"
+                    >
+                        <input type="radio" wire:model.live="planSlug" value="{{ $plan->slug }}" class="sr-only">
+                        <span class="font-medium text-zinc-900 dark:text-white">{{ $plan->name }}</span>
+                        <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ $plan->max_users }} users &middot; {{ $plan->max_workspaces }} workspaces</span>
+                    </label>
                 @endforeach
-            </flux:select>
+            </div>
 
-            <flux:button type="submit" variant="primary" class="w-full" wire:loading.attr="disabled">
-                Create Organization
-            </flux:button>
-        </form>
+            <div class="flex items-center gap-3">
+                <flux:button wire:click="previousStep" variant="ghost" type="button">
+                    Back
+                </flux:button>
+
+                <flux:button wire:click="nextStep" variant="primary" class="w-full" type="button">
+                    Continue
+                </flux:button>
+            </div>
+        @endif
+
+        {{-- Step 3: Name your workspace --}}
+        @if ($step === 3)
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-zinc-900 dark:text-white">Name your workspace</h1>
+                <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    Workspaces help you organize your projects and clients.
+                </p>
+            </div>
+
+            <form wire:submit="submit" class="space-y-6">
+                <flux:input
+                    wire:model="workspaceName"
+                    label="Workspace name"
+                    type="text"
+                    placeholder="My Workspace"
+                    required
+                    autofocus
+                />
+
+                <div class="flex items-center gap-3">
+                    <flux:button wire:click="previousStep" variant="ghost" type="button">
+                        Back
+                    </flux:button>
+
+                    <flux:button type="submit" variant="primary" class="w-full">
+                        Create company
+                    </flux:button>
+                </div>
+            </form>
+        @endif
     </div>
     @endvolt
 </x-layouts.onboarding>

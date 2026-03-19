@@ -16,8 +16,8 @@ class EnsureOnboarded
             return $next($request);
         }
 
-        if (! $user->isOnboarded() && ! $request->routeIs('onboarding.*')) {
-            return redirect()->route('onboarding.create-organization');
+        if (! $user->isOnboarded() && ! $request->routeIs('onboarding') && ! $request->routeIs('onboarding.*')) {
+            return redirect()->route('onboarding');
         }
 
         return $next($request);
