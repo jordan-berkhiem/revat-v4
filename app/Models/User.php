@@ -87,6 +87,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail, Two
     public function workspaces(): BelongsToMany
     {
         return $this->belongsToMany(Workspace::class, 'workspace_user')
+            ->using(WorkspaceUser::class)
             ->withPivot('is_pinned')
             ->withTimestamps();
     }

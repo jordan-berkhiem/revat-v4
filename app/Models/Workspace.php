@@ -30,6 +30,7 @@ class Workspace extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'workspace_user')
+            ->using(WorkspaceUser::class)
             ->withPivot('is_pinned')
             ->withTimestamps();
     }

@@ -209,6 +209,16 @@ Route::middleware(['auth', 'verified', 'onboarded', 'organization', 'throttle:30
         ->name('switch-workspace');
 });
 
+Route::post('/toggle-workspace-pin/{workspace}', function (\App\Models\Workspace $workspace) {
+    $user = auth()->user();
+    $org = $user->currentOrganization;
+    if ($workspace->organization_id !== $org->id) {
+        abort(403);
+    }
+    $isPinned = app(\App\Services\WorkspaceContext::class)->togglePin($user, $workspace);
+    return response()->json(['is_pinned' => $isPinned]);
+})->middleware(['auth', 'verified', 'onboarded', 'organization'])->name('toggle-workspace-pin');
+
 // ── Invitation Routes ───────────────────────────────────────────────────
 Route::get('/alpha-agreement', fn () => view('pages.alpha-agreement'))
     ->name('alpha.agreement');
