@@ -6,18 +6,18 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "bacon/bacon-qr-code": "^3.0",
-        "filament/filament": "^5.0",
-        "laravel/cashier": "^16.4",
-        "laravel/framework": "^12.0",
+        "filament/filament": "^5.4",
+        "laravel/cashier": "^16.5",
+        "laravel/framework": "^13.0",
         "laravel/horizon": "^5.45",
         "laravel/pulse": "^1.7",
-        "laravel/tinker": "^2.10.1",
+        "laravel/tinker": "^3.0",
         "livewire/flux": "^2.13",
         "livewire/volt": "^1.10",
-        "pragmarx/google2fa-laravel": "^2.3",
-        "saloonphp/laravel-plugin": "^3.9",
+        "pragmarx/google2fa-laravel": "^3.0",
+        "saloonphp/laravel-plugin": "3.9.99",
         "saloonphp/rate-limit-plugin": "^2.4",
         "saloonphp/saloon": "^3.15",
         "spatie/laravel-csp": "^3.23",
@@ -87,5 +87,34 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [{
+        "name": "saloon-laravel",
+        "type": "package",
+        "package": {
+            "name": "saloonphp/laravel-plugin",
+            "version": "3.9.99",
+            "source": {
+                "url": "https://github.com/saloonphp/laravel-plugin.git",
+                "type": "git",
+                "reference": "v3"
+            },
+            "dist": {
+                "url": "https://api.github.com/repos/saloonphp/laravel-plugin/zipball/v3.9.1",
+                "type": "zip"
+            },
+            "autoload": {
+                "psr-4": {
+                    "Saloon\\Laravel\\": "src/"
+                }
+            },
+            "require": {
+                "php": "^8.2",
+                "illuminate/console": "^11.0 || ^12.39.0 || ^13.0",
+                "illuminate/support": "^11.0 || ^12.39.0 || ^13.0",
+                "saloonphp/saloon": "^3.5",
+                "symfony/finder": "^6.4 || ^7.0"
+            }
+        }
+    }]
 }
