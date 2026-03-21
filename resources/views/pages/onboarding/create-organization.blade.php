@@ -218,7 +218,7 @@ new class extends Component
                     </flux:button>
 
                     <flux:button type="submit" variant="primary" class="w-full">
-                        Create company
+                        Continue
                     </flux:button>
                 </div>
             </form>
