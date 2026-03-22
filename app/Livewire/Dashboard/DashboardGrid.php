@@ -8,6 +8,7 @@ use App\Models\DashboardSnapshot;
 use App\Models\DashboardWidget;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class DashboardGrid extends Component
@@ -74,6 +75,7 @@ class DashboardGrid extends Component
             ->delete();
     }
 
+    #[On('add-widget-to-grid')]
     public function addWidget(string $widgetType, array $config = []): void
     {
         $defaults = WidgetRegistry::defaultsFor($widgetType);
@@ -94,6 +96,10 @@ class DashboardGrid extends Component
             'config' => $config,
             'sort_order' => 0,
         ]);
+
+        // GridStack is inside wire:ignore so Livewire can't insert the new widget.
+        // Reload the page to render it.
+        $this->redirect(route('dashboard'), navigate: true);
     }
 
     public function render()
