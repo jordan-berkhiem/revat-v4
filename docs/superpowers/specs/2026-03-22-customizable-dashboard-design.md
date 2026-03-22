@@ -89,7 +89,7 @@ Key benefits:
 | widget_count | tinyint unsigned | for display in version history |
 | created_at | timestamp | |
 
-Retention: keep last 20 snapshots per dashboard, prune oldest via scheduled job.
+Retention: keep last 20 snapshots per dashboard, prune oldest via daily scheduled command (`dashboard:prune-snapshots`) registered in `routes/console.php`.
 
 ### `user_dashboard_preferences` table
 
@@ -371,9 +371,9 @@ Three seeded templates cloned on first visit:
 ### First-Visit Flow
 
 1. User hits `/dashboard` — no preference record exists
-2. If workspace has existing dashboards → show them with "Start from a template" option
+2. If workspace has existing dashboards → show them in a selector; user must explicitly pick one to set as active. "Start from a template" option available at the bottom.
 3. If no dashboards exist → template selection screen with 3 cards
-4. On selection → clone template into workspace, set as active dashboard
+4. On selection → clone template into workspace, set as user's active dashboard
 5. "Start from scratch" → empty dashboard, land in edit mode
 
 Templates are seeded via `DashboardTemplateSeeder` as `is_template = true` rows with no workspace_id. Cloning copies all widget rows with new IDs.
@@ -463,7 +463,6 @@ app/
 │   ├── WidgetRegistry.php
 │   └── DataSourceRegistry.php
 ├── Livewire/Dashboard/
-│   ├── DashboardPage.php (or Volt in blade)
 │   ├── DashboardGrid.php
 │   ├── DateFilter.php (existing, reused)
 │   ├── WidgetConfigPanel.php
