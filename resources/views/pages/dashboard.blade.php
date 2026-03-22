@@ -220,6 +220,9 @@ new class extends Component
                 <livewire:dashboard.dashboard-grid :dashboard-id="$activeDashboardId" :key="'grid-' . $activeDashboardId" />
             @endif
 
+            {{-- Widget Config Panel (slide-over) --}}
+            <livewire:dashboard.widget-config-panel />
+
             {{-- Hidden form for creating new dashboard from the dropdown --}}
             <form id="create-dashboard-form" method="POST" action="{{ route('dashboard.store') }}" class="hidden">
                 @csrf
