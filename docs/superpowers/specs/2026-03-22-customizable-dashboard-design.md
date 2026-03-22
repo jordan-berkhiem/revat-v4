@@ -416,6 +416,46 @@ Only desktop layout stored. GridStack handles responsive adaptation via `columnO
 
 ---
 
+## Dashboard Template Sharing (Export/Import)
+
+Users can export a dashboard as a shareable link and others can import it into their workspace.
+
+### Export Flow
+
+- "Share" option in dashboard header menu (available to anyone who can edit)
+- Generates a shareable link with a unique token: `/dashboard/import/{token}`
+- Exported payload is the dashboard layout + widget configs only — no data, no workspace-specific IDs
+- Layout is snapshotted at export time so the link remains valid even if the source dashboard is later modified or deleted
+
+### Import Flow
+
+- User opens share link → preview screen showing dashboard name, description, widget count, and schematic layout preview
+- "Import to Workspace" button → clones the template into their active workspace as a new dashboard
+- User must be authenticated and have create-dashboard permission (owner/admin/member)
+
+### `dashboard_exports` table
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | bigint PK | |
+| dashboard_id | FK → dashboards | source dashboard |
+| created_by | FK → users | |
+| token | string(64), unique | URL-safe random token |
+| layout | JSON | snapshot of widgets at export time (positions + configs, no data) |
+| name | string(100) | dashboard name at time of export |
+| description | string(255), nullable | |
+| widget_count | tinyint unsigned | |
+| expires_at | timestamp, nullable | null = never expires |
+| created_at | timestamp | |
+
+### Permissions
+
+- Export: anyone who can edit the dashboard
+- Import: anyone with create-dashboard permission in their workspace
+- Revoke: the exporter or any owner/admin can delete the export link
+
+---
+
 ## Global Date Filter
 
 Reuses the existing `DateFilter` Livewire component. Dispatches `date-range-changed` event. All widgets listen via `#[On('date-range-changed')]`.
@@ -441,6 +481,11 @@ Widgets with `date_range_override` set in their config ignore the global event a
 - Template cloning creates correct workspace dashboard
 - Date filter cascades to all widgets, overridden widgets unaffected
 - User preferences persist active dashboard per workspace
+- Export creates a valid share link with snapshotted layout
+- Import via share link clones dashboard into workspace with correct widgets
+- Import requires authentication and create-dashboard permission
+- Expired export links return 404
+- Revoking an export link (exporter or owner/admin) invalidates it
 
 ### Browser Tests
 - GridStack initializes with correct positions
@@ -478,6 +523,7 @@ app/
 │   ├── Dashboard.php
 │   ├── DashboardWidget.php
 │   ├── DashboardSnapshot.php
+│   ├── DashboardExport.php
 │   └── UserDashboardPreference.php
 └── Services/Dashboard/
     ├── MetricsService.php (existing, unchanged)
@@ -502,6 +548,7 @@ database/
 │   ├── xxxx_create_dashboards_table.php
 │   ├── xxxx_create_dashboard_widgets_table.php
 │   ├── xxxx_create_dashboard_snapshots_table.php
+│   ├── xxxx_create_dashboard_exports_table.php
 │   └── xxxx_create_user_dashboard_preferences_table.php
 └── seeders/
     └── DashboardTemplateSeeder.php
