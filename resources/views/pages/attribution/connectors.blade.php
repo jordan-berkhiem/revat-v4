@@ -679,7 +679,7 @@ new class extends Component
                     <flux:checkbox wire:model="isActive" label="Active" />
 
                     <div class="flex justify-end gap-2 pt-2">
-                        <flux:button wire:click="$set('showModal', false)" variant="ghost">Cancel</flux:button>
+                        <flux:button type="button" wire:click="$set('showModal', false)" variant="ghost">Cancel</flux:button>
                         <flux:button type="submit" variant="primary">{{ $editingId ? 'Update' : 'Create' }} Connector</flux:button>
                     </div>
                 </form>

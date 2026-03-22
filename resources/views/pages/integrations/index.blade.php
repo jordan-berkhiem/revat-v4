@@ -92,11 +92,11 @@ new class extends Component
                 <h1 class="text-[22px] font-bold text-slate-900 dark:text-white">Integrations</h1>
                 <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-0.5">Manage your data source connections</p>
             </div>
-            <a href="{{ route('integrations.create') }}">
-                <flux:button variant="primary" icon="plus" :disabled="$atCapacity">
-                    Add Integration
-                </flux:button>
-            </a>
+            @if ($atCapacity)
+                <flux:button variant="primary" icon="plus" disabled>Add Integration</flux:button>
+            @else
+                <flux:button variant="primary" icon="plus" href="{{ route('integrations.create') }}">Add Integration</flux:button>
+            @endif
         </div>
 
         {{-- Plan Limit Banner --}}
