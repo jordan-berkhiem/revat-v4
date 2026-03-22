@@ -1,78 +1,95 @@
 <?php
 
-use Carbon\Carbon;
+use App\Models\Dashboard;
+use App\Models\UserDashboardPreference;
+use App\Services\WorkspaceContext;
 use Livewire\Volt\Component;
 
 new class extends Component
 {
-    public string $timeRange = '30d';
+    public ?int $activeDashboardId = null;
 
-    public string $start;
+    public string $activeDashboardName = '';
 
-    public string $end;
+    public bool $editing = false;
+
+    public bool $showTemplates = false;
+
+    /** @var array<int, array{id: int, name: string}> */
+    public array $dashboards = [];
 
     public function mount(): void
     {
-        $range = session('dashboard_date_range');
+        $workspace = app(WorkspaceContext::class)->getWorkspace();
+        if (! $workspace) {
+            return;
+        }
 
-        if ($range) {
-            $this->start = $range['start'];
-            $this->end = $range['end'];
-            $this->timeRange = match ($range['preset'] ?? '') {
-                'last_7' => '7d',
-                'last_30' => '30d',
-                'last_90' => '90d',
-                default => 'custom',
-            };
+        $this->dashboards = Dashboard::forWorkspace($workspace->id)
+            ->notTemplates()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])
+            ->toArray();
+
+        $preference = UserDashboardPreference::where('user_id', auth()->id())
+            ->where('workspace_id', $workspace->id)
+            ->first();
+
+        if ($preference && $preference->active_dashboard_id) {
+            $this->setActiveDashboard($preference->active_dashboard_id);
+        } elseif (count($this->dashboards) > 0) {
+            $this->setActiveDashboard($this->dashboards[0]['id']);
         } else {
-            $this->setRange('30d');
+            $this->showTemplates = true;
         }
     }
 
-    public function setRange(string $range): void
+    public function switchDashboard(int $dashboardId): void
     {
-        $this->timeRange = $range;
+        $workspace = app(WorkspaceContext::class)->getWorkspace();
+        if (! $workspace) {
+            return;
+        }
 
-        [$start, $end] = match ($range) {
-            '7d' => [today()->subDays(6), today()],
-            '30d' => [today()->subDays(29), today()],
-            '90d' => [today()->subDays(89), today()],
-            default => [Carbon::parse($this->start), Carbon::parse($this->end)],
-        };
+        $dashboard = Dashboard::forWorkspace($workspace->id)
+            ->notTemplates()
+            ->find($dashboardId);
 
-        $this->start = $start->toDateString();
-        $this->end = $end->toDateString();
+        if (! $dashboard) {
+            return;
+        }
 
-        session(['dashboard_date_range' => [
-            'start' => $this->start,
-            'end' => $this->end,
-            'preset' => match ($range) {
-                '7d' => 'last_7',
-                '30d' => 'last_30',
-                '90d' => 'last_90',
-                default => 'custom',
-            },
-        ]]);
+        UserDashboardPreference::updateOrCreate(
+            [
+                'user_id' => auth()->id(),
+                'workspace_id' => $workspace->id,
+            ],
+            ['active_dashboard_id' => $dashboard->id],
+        );
 
-        $this->dispatch('date-range-changed', start: $this->start, end: $this->end);
+        $this->setActiveDashboard($dashboard->id);
     }
 
-    public function applyCustomRange(): void
+    public function enterEditMode(): void
     {
-        $this->validate([
-            'start' => 'required|date',
-            'end' => 'required|date|after_or_equal:start',
-        ]);
+        $this->authorize('integrate');
+        $this->editing = true;
+    }
 
-        $this->timeRange = 'custom';
+    public function exitEditMode(): void
+    {
+        $this->editing = false;
+    }
 
-        session(['dashboard_date_range' => [
-            'start' => $this->start,
-            'end' => $this->end,
-            'preset' => 'custom',
-        ]]);
-
-        $this->dispatch('date-range-changed', start: $this->start, end: $this->end);
+    protected function setActiveDashboard(int $id): void
+    {
+        $dashboard = Dashboard::find($id);
+        if ($dashboard) {
+            $this->activeDashboardId = $dashboard->id;
+            $this->activeDashboardName = $dashboard->name;
+            $this->showTemplates = false;
+        }
     }
 }; ?>
 
@@ -81,94 +98,134 @@ new class extends Component
 
     @volt('dashboard')
     <div>
-        {{-- Page Header --}}
-        <div class="flex justify-between items-start mb-6">
-            <div>
-                <h1 class="text-[22px] font-bold text-slate-900 dark:text-white">Dashboard</h1>
-                <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-0.5">Overview of your marketing performance</p>
-            </div>
+        @if ($showTemplates)
+            {{-- Template Selection Screen --}}
+            <div class="max-w-4xl mx-auto py-12">
+                <div class="text-center mb-8">
+                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Create Your Dashboard</h1>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">Choose a template to get started or build from scratch.</p>
+                </div>
 
-            <div class="flex items-center gap-2">
-                <flux:button.group>
-                    <flux:button
-                        size="sm"
-                        :variant="$timeRange === '7d' ? 'primary' : 'ghost'"
-                        wire:click="setRange('7d')"
-                        class="text-[12.5px] font-medium py-[7px] px-4"
-                    >7d</flux:button>
-                    <flux:button
-                        size="sm"
-                        :variant="$timeRange === '30d' ? 'primary' : 'ghost'"
-                        wire:click="setRange('30d')"
-                        class="text-[12.5px] font-medium py-[7px] px-4"
-                    >30d</flux:button>
-                    <flux:button
-                        size="sm"
-                        :variant="$timeRange === '90d' ? 'primary' : 'ghost'"
-                        wire:click="setRange('90d')"
-                        class="text-[12.5px] font-medium py-[7px] px-4"
-                    >90d</flux:button>
-                    <flux:button
-                        size="sm"
-                        :variant="$timeRange === 'custom' ? 'primary' : 'ghost'"
-                        wire:click="$set('timeRange', 'custom')"
-                        class="text-[12.5px] font-medium py-[7px] px-4"
-                    >Custom</flux:button>
-                </flux:button.group>
-
-                @if ($timeRange === 'custom')
-                    <div class="flex items-center gap-2 ml-2">
-                        <input
-                            type="date"
-                            wire:model="start"
-                            class="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                        />
-                        <span class="text-xs text-slate-400">to</span>
-                        <input
-                            type="date"
-                            wire:model="end"
-                            class="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                        />
-                        <flux:button size="sm" variant="primary" wire:click="applyCustomRange">Apply</flux:button>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    {{-- Executive Overview --}}
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                                <flux:icon.chart-bar class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Executive Overview</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">High-level KPIs, revenue trends, and campaign performance at a glance.</p>
+                        <form method="POST" action="{{ route('dashboard.store') }}">
+                            @csrf
+                            <input type="hidden" name="name" value="Executive Overview" />
+                            <input type="hidden" name="template_slug" value="executive" />
+                            <flux:button type="submit" variant="primary" size="sm" class="w-full">Start with this</flux:button>
+                        </form>
                     </div>
-                @endif
-            </div>
-        </div>
 
-        {{-- Stat Cards --}}
-        <livewire:dashboard.stat-cards />
+                    {{-- Campaign Manager --}}
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                                <flux:icon.megaphone class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Campaign Manager</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Campaign metrics, email performance, and click-through analytics.</p>
+                        <form method="POST" action="{{ route('dashboard.store') }}">
+                            @csrf
+                            <input type="hidden" name="name" value="Campaign Manager" />
+                            <input type="hidden" name="template_slug" value="campaign-manager" />
+                            <flux:button type="submit" variant="primary" size="sm" class="w-full">Start with this</flux:button>
+                        </form>
+                    </div>
 
-        {{-- Charts Row --}}
-        <div class="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-6">
-            {{-- Revenue Chart --}}
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-                <div class="flex justify-between items-center mb-5">
-                    <span class="text-[15px] font-semibold text-slate-800 dark:text-slate-200">Revenue &amp; Cost</span>
-                    <div class="flex gap-4">
-                        <span class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                            <span class="w-2 h-2 rounded-full bg-blue-600"></span> Revenue
-                        </span>
-                        <span class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                            <span class="w-2 h-2 rounded-full bg-slate-400"></span> Cost
-                        </span>
+                    {{-- Attribution Analyst --}}
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-lg bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
+                                <flux:icon.adjustments-horizontal class="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Attribution Analyst</h3>
+                        </div>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Deep attribution data, model comparisons, and conversion paths.</p>
+                        <form method="POST" action="{{ route('dashboard.store') }}">
+                            @csrf
+                            <input type="hidden" name="name" value="Attribution Analyst" />
+                            <input type="hidden" name="template_slug" value="attribution-analyst" />
+                            <flux:button type="submit" variant="primary" size="sm" class="w-full">Start with this</flux:button>
+                        </form>
                     </div>
                 </div>
-                <livewire:dashboard.revenue-chart />
-            </div>
 
-            {{-- Campaign Performance --}}
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-                <div class="flex justify-between items-center mb-5">
-                    <span class="text-[15px] font-semibold text-slate-800 dark:text-slate-200">Campaign Performance</span>
+                <div class="text-center">
+                    <form method="POST" action="{{ route('dashboard.store') }}">
+                        @csrf
+                        <input type="hidden" name="name" value="My Dashboard" />
+                        <flux:button type="submit" variant="ghost" size="sm">Start from scratch</flux:button>
+                    </form>
                 </div>
-                <livewire:dashboard.campaign-performance />
             </div>
-        </div>
+        @else
+            {{-- Page Header --}}
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <h1 class="text-[22px] font-bold text-slate-900 dark:text-white">{{ $activeDashboardName }}</h1>
+                    </div>
 
-        {{-- Attribution Widget --}}
-        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-            <livewire:dashboard.attribution-widget />
-        </div>
+                    @if (count($dashboards) > 1)
+                        <flux:dropdown>
+                            <flux:button variant="ghost" size="sm" icon-trailing="chevron-down">
+                                Switch
+                            </flux:button>
+
+                            <flux:menu>
+                                @foreach ($dashboards as $d)
+                                    <flux:menu.item wire:click="switchDashboard({{ $d['id'] }})">
+                                        {{ $d['name'] }}
+                                        @if ($d['id'] === $activeDashboardId)
+                                            <flux:icon.check class="w-4 h-4 ml-auto" />
+                                        @endif
+                                    </flux:menu.item>
+                                @endforeach
+                                <flux:menu.separator />
+                                <flux:menu.item :href="route('dashboard.store')" onclick="event.preventDefault(); document.getElementById('create-dashboard-form').submit();">
+                                    + New Dashboard
+                                </flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
+                    @endif
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <livewire:dashboard.date-filter />
+
+                    @can('integrate')
+                        @if ($editing)
+                            <flux:button size="sm" variant="primary" wire:click="exitEditMode">Done</flux:button>
+                            <flux:button size="sm" variant="ghost" wire:click="exitEditMode">Cancel</flux:button>
+                        @else
+                            <flux:button size="sm" variant="ghost" wire:click="enterEditMode" icon="pencil-square">
+                                Customize
+                            </flux:button>
+                        @endif
+                    @endcan
+                </div>
+            </div>
+
+            {{-- Dashboard Grid --}}
+            @if ($activeDashboardId)
+                <livewire:dashboard.dashboard-grid :dashboard-id="$activeDashboardId" :key="'grid-' . $activeDashboardId" />
+            @endif
+
+            {{-- Hidden form for creating new dashboard from the dropdown --}}
+            <form id="create-dashboard-form" method="POST" action="{{ route('dashboard.store') }}" class="hidden">
+                @csrf
+                <input type="hidden" name="name" value="New Dashboard" />
+            </form>
+        @endif
     </div>
     @endvolt
 </x-layouts.app>
