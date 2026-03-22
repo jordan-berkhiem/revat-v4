@@ -86,19 +86,19 @@ new class extends Component
     {
         $this->authorize('integrate');
         $this->editing = true;
-        $this->dispatch('dashboard-enter-edit-mode');
+        $this->js("window.dispatchEvent(new CustomEvent('dashboard-enter-edit-mode'))");
     }
 
     public function exitEditMode(): void
     {
         $this->editing = false;
-        $this->dispatch('dashboard-exit-edit-mode');
+        $this->js("window.dispatchEvent(new CustomEvent('dashboard-exit-edit-mode'))");
     }
 
     public function cancelEditMode(): void
     {
         $this->editing = false;
-        $this->dispatch('dashboard-cancel-edit-mode');
+        $this->js("window.dispatchEvent(new CustomEvent('dashboard-cancel-edit-mode'))");
     }
 
     public function openVersionHistory(): void
