@@ -1,6 +1,6 @@
 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 h-full flex flex-col"
     x-data="chartWidget()"
-    x-init="init(@js($chartData), @js(['type' => $chartType, 'variant' => $variant]))"
+    x-init="$nextTick(() => initChart($refs.canvas, @js($chartData), @js($chartType), false, { horizontal: @js($variant === 'horizontal') }))"
     @widget-resized.window="resize()">
 
     {{-- Header --}}
