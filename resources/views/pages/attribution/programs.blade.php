@@ -25,6 +25,7 @@ new class extends Component
 
     public function openCreateModal(): void
     {
+        $this->authorize('integrate');
         $this->reset(['editingId', 'name', 'code', 'description', 'status', 'startDate', 'endDate']);
         $this->status = 'active';
         $this->showModal = true;
@@ -32,6 +33,7 @@ new class extends Component
 
     public function openEditModal(int $id): void
     {
+        $this->authorize('integrate');
         $workspace = app(WorkspaceContext::class)->getWorkspace();
         if (! $workspace) {
             return;
@@ -50,6 +52,8 @@ new class extends Component
 
     public function save(): void
     {
+        $this->authorize('integrate');
+
         $workspace = app(WorkspaceContext::class)->getWorkspace();
         if (! $workspace) {
             return;
@@ -92,6 +96,8 @@ new class extends Component
 
     public function delete(int $id): void
     {
+        $this->authorize('integrate');
+
         $workspace = app(WorkspaceContext::class)->getWorkspace();
         if (! $workspace) {
             return;
@@ -125,9 +131,11 @@ new class extends Component
                 <h1 class="text-[22px] font-bold text-slate-900 dark:text-white">Programs</h1>
                 <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-0.5">Top-level marketing programs</p>
             </div>
-            <flux:button variant="primary" icon="plus" wire:click="openCreateModal">
-                Add Program
-            </flux:button>
+            @can('integrate')
+                <flux:button variant="primary" icon="plus" wire:click="openCreateModal">
+                    Add Program
+                </flux:button>
+            @endcan
         </div>
 
         <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
@@ -141,7 +149,9 @@ new class extends Component
                                 <th class="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-slate-400 px-3 py-[11px]">Status</th>
                                 <th class="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-slate-400 px-3 py-[11px]">Description</th>
                                 <th class="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-slate-400 px-3 py-[11px]">Dates</th>
-                                <th class="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-slate-400 px-3 py-[11px]">Actions</th>
+                                @can('integrate')
+                                    <th class="text-[10.5px] font-semibold uppercase tracking-[0.4px] text-slate-400 px-3 py-[11px]">Actions</th>
+                                @endcan
                             </tr>
                         </thead>
                         <tbody class="text-[12.5px]">
@@ -180,22 +190,24 @@ new class extends Component
                                             -
                                         @endif
                                     </td>
-                                    <td class="px-3 py-2.5">
-                                        <div class="flex items-center gap-1">
-                                            <flux:button size="xs" variant="ghost" icon="pencil-square" wire:click="openEditModal({{ $program->id }})" title="Edit" />
-                                            @unless ($program->is_default)
-                                                <flux:button
-                                                    size="xs"
-                                                    variant="ghost"
-                                                    icon="trash"
-                                                    wire:click="delete({{ $program->id }})"
-                                                    wire:confirm="Are you sure you want to delete this program? All initiatives and efforts under it will also be deleted."
-                                                    title="Delete"
-                                                    class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                                />
-                                            @endunless
-                                        </div>
-                                    </td>
+                                    @can('integrate')
+                                        <td class="px-3 py-2.5">
+                                            <div class="flex items-center gap-1">
+                                                <flux:button size="xs" variant="ghost" icon="pencil-square" wire:click="openEditModal({{ $program->id }})" title="Edit" />
+                                                @unless ($program->is_default)
+                                                    <flux:button
+                                                        size="xs"
+                                                        variant="ghost"
+                                                        icon="trash"
+                                                        wire:click="delete({{ $program->id }})"
+                                                        wire:confirm="Are you sure you want to delete this program? All initiatives and efforts under it will also be deleted."
+                                                        title="Delete"
+                                                        class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                    />
+                                                @endunless
+                                            </div>
+                                        </td>
+                                    @endcan
                                 </tr>
                             @endforeach
                         </tbody>

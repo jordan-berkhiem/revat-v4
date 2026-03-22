@@ -39,7 +39,9 @@
                 <flux:sidebar.item href="{{ route('attribution.connectors') }}" :current="request()->routeIs('attribution.connectors')" data-testid="nav-attribution-connectors">Connectors</flux:sidebar.item>
                 <flux:sidebar.item href="{{ route('attribution.stats') }}" :current="request()->routeIs('attribution.stats')" data-testid="nav-attribution-stats">Stats</flux:sidebar.item>
             </flux:sidebar.group>
-            <flux:sidebar.item icon="puzzle-piece" href="{{ route('integrations') }}" :current="request()->routeIs('integrations', 'integrations.*')" data-testid="nav-integrations">Integrations</flux:sidebar.item>
+            @can('integrate')
+                <flux:sidebar.item icon="puzzle-piece" href="{{ route('integrations') }}" :current="request()->routeIs('integrations', 'integrations.*')" data-testid="nav-integrations">Integrations</flux:sidebar.item>
+            @endcan
             @can('manage')
                 <flux:sidebar.item icon="square-3-stack-3d" href="{{ route('settings.workspaces') }}" :current="request()->routeIs('settings.workspaces*')" data-testid="nav-workspaces">Workspaces</flux:sidebar.item>
             @endcan
